@@ -151,7 +151,6 @@ async def security_callback(client, callback: CallbackQuery):
         _config_cache[chat_id]["warning_limit"] = limit
         await callback.answer(f"✅ sᴇᴛ ᴛᴏ {limit} ᴡᴀʀɴɪɴɢs")
         
-        # Update display
         try:
             await callback.message.edit_text(
                 f"🛡️ **ɢʀᴏᴜᴘ sᴇᴄᴜʀɪᴛʏ sᴇᴛᴛɪɴɢs**\n\n"
@@ -161,14 +160,13 @@ async def security_callback(client, callback: CallbackQuery):
                 reply_markup=callback.message.reply_markup
             )
         except RPCError:
-            pass  # Message not modified
+            pass
     
     elif action == "action":
         act = callback.data.split("_")[2]
         _config_cache[chat_id]["action"] = act
         await callback.answer(f"✅ ᴀᴄᴛɪᴏɴ: {act.upper()}")
         
-        # Update display
         try:
             await callback.message.edit_text(
                 f"🛡️ **ɢʀᴏᴜᴘ sᴇᴄᴜʀɪᴛʏ sᴇᴛᴛɪɴɢs**\n\n"
@@ -178,10 +176,9 @@ async def security_callback(client, callback: CallbackQuery):
                 reply_markup=callback.message.reply_markup
             )
         except RPCError:
-            pass  # Message not modified
+            pass
     
     elif action == "save":
-        # Save to database
         await gsdb.update_bio_config(
             chat_id,
             _config_cache[chat_id]["warning_limit"],
@@ -223,7 +220,6 @@ async def trust_user(client, message: Message):
             "`/trust @username` ᴏʀ `/trust user_id`"
         )
     
-    # Check if already whitelisted
     if await gsdb.is_whitelisted(message.chat.id, target.id):
         return await _info(message, "ᴜsᴇʀ ɪs ᴀʟʀᴇᴀᴅʏ ᴛʀᴜsᴛᴇᴅ.")
     
@@ -259,7 +255,6 @@ async def untrust_user(client, message: Message):
             "`/untrust @username` ᴏʀ `/untrust user_id`"
         )
     
-    # Check if whitelisted
     if not await gsdb.is_whitelisted(message.chat.id, target.id):
         return await _info(message, "ᴜsᴇʀ ɪs ɴᴏᴛ ɪɴ ᴛʜᴇ ᴛʀᴜsᴛᴇᴅ ʟɪsᴛ.")
     
@@ -353,7 +348,6 @@ async def bioscan_command(client, message: Message):
             "`/bioscan @username` ᴏʀ `/bioscan user_id`"
         )
     
-    # Detailed scan
     result = await check_bio_detailed(client, target.id)
     
     status_emoji = "🚨" if result["has_link"] else "✅"
@@ -408,7 +402,6 @@ async def security_stats(client, message: Message):
 @app.on_message(filters.group & ~filters.service & ~filters.bot, group=15)
 async def auto_bio_check(client, message: Message):
     """Automatically check user bios when they message"""
-    # Skip if no user
     if not message.from_user:
         return
     
@@ -444,6 +437,12 @@ async def auto_bio_check(client, message: Message):
     if not has_link:
         return
     
+    # DELETE MESSAGE FIRST
+    try:
+        await message.delete()
+    except Exception as e:
+        print(f"[Security] Cannot delete message: {e}")
+    
     # Add warning
     warn_count = await gsdb.add_warning(chat_id, user_id)
     limit = bio_config.get("warning_limit", 5)
@@ -457,7 +456,6 @@ async def auto_bio_check(client, message: Message):
                 action_emoji = "🚫"
                 action_text = "ʙᴀɴɴᴇᴅ"
             else:
-                # Mute permanently
                 await message.chat.restrict_member(
                     user_id,
                     ChatPermissions(),
@@ -466,13 +464,6 @@ async def auto_bio_check(client, message: Message):
                 action_emoji = "🔇"
                 action_text = "ᴍᴜᴛᴇᴅ"
             
-            # Try to delete offending message
-            try:
-                await message.delete()
-            except Exception as e:
-                print(f"[Security] Could not delete message: {e}")
-            
-            # Send notification
             await message.reply_text(
                 f"{action_emoji} **{action_text}**\n\n"
                 f"**ᴜsᴇʀ:** {message.from_user.mention}\n"
@@ -488,12 +479,20 @@ async def auto_bio_check(client, message: Message):
                 "ɪ ɴᴇᴇᴅ ᴀᴅᴍɪɴ ʀɪɢʜᴛs ᴛᴏ ʀᴇsᴛʀɪᴄᴛ ᴜsᴇʀs!"
             )
         except UserAdminInvalid:
-            pass  # User is admin, skip silently
+            pass
         except Exception as e:
             print(f"[Security] Action error: {e}")
     
     else:
-        # Issue warning
+        # Issue warning with inline keyboard
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ ᴡᴀʀɴɪɴɢ", callback_data=f"cancel_warn_{user_id}"),
+                InlineKeyboardButton("✅ ᴡʜɪᴛᴇʟɪsᴛ", callback_data=f"whitelist_{user_id}")
+            ],
+            [InlineKeyboardButton("🗑️ ᴄʟᴏsᴇ", callback_data="close")]
+        ])
+        
         try:
             await message.reply_text(
                 f"⚠️ **ᴡᴀʀɴɪɴɢ {warn_count}/{limit}**\n\n"
@@ -501,7 +500,69 @@ async def auto_bio_check(client, message: Message):
                 f"**ʀᴇᴀsᴏɴ:** ʟɪɴᴋ ᴅᴇᴛᴇᴄᴛᴇᴅ ɪɴ ʙɪᴏ\n\n"
                 f"ʀᴇᴍᴏᴠᴇ ʟɪɴᴋs ғʀᴏᴍ ʏᴏᴜʀ ʙɪᴏ ᴏʀ ғᴀᴄᴇ {action}.\n"
                 f"_ʙɪᴏ ᴘʀᴇᴠɪᴇᴡ: {clean_bio_preview(bio, 80)}_",
-                disable_web_page_preview=True
+                disable_web_page_preview=True,
+                reply_markup=keyboard
             )
         except Exception as e:
             print(f"[Security] Warning message error: {e}")
+
+
+# ────────────────────────────────────────────────────────────
+# Callback handlers for inline buttons
+# ────────────────────────────────────────────────────────────
+@app.on_callback_query(filters.regex(r"^cancel_warn_"))
+async def cancel_warning_callback(client, callback: CallbackQuery):
+    """Handle cancel warning button"""
+    user_id = callback.from_user.id
+    chat_id = callback.message.chat.id
+    
+    # Verify admin
+    try:
+        member = await callback.message.chat.get_member(user_id)
+        if member.status not in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+            if user_id not in SUDOERS:
+                return await callback.answer("❌ ᴀᴅᴍɪɴ ᴏɴʟʏ!", show_alert=True)
+    except Exception:
+        return await callback.answer("❌ ᴇʀʀᴏʀ", show_alert=True)
+    
+    target_id = int(callback.data.split("_")[-1])
+    await gsdb.clear_warnings(chat_id, target_id)
+    
+    await callback.message.edit_text(
+        f"✅ **ᴡᴀʀɴɪɴɢs ᴄʟᴇᴀʀᴇᴅ**\n\n"
+        f"ᴜsᴇʀ `{target_id}` ɴᴏᴡ ʜᴀs ɴᴏ ᴡᴀʀɴɪɴɢs."
+    )
+    await callback.answer("✅ ᴡᴀʀɴɪɴɢs ᴄʟᴇᴀʀᴇᴅ!")
+
+
+@app.on_callback_query(filters.regex(r"^whitelist_"))
+async def whitelist_callback(client, callback: CallbackQuery):
+    """Handle whitelist button"""
+    user_id = callback.from_user.id
+    chat_id = callback.message.chat.id
+    
+    # Verify admin
+    try:
+        member = await callback.message.chat.get_member(user_id)
+        if member.status not in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+            if user_id not in SUDOERS:
+                return await callback.answer("❌ ᴀᴅᴍɪɴ ᴏɴʟʏ!", show_alert=True)
+    except Exception:
+        return await callback.answer("❌ ᴇʀʀᴏʀ", show_alert=True)
+    
+    target_id = int(callback.data.split("_")[-1])
+    await gsdb.add_whitelist(chat_id, target_id, None)
+    await gsdb.clear_warnings(chat_id, target_id)
+    
+    await callback.message.edit_text(
+        f"✅ **ᴜsᴇʀ ᴡʜɪᴛᴇʟɪsᴛᴇᴅ**\n\n"
+        f"ᴜsᴇʀ `{target_id}` ɪs ɴᴏᴡ ᴇxᴇᴍᴘᴛ ғʀᴏᴍ ʙɪᴏ ᴄʜᴇᴄᴋs."
+    )
+    await callback.answer("✅ ᴡʜɪᴛᴇʟɪsᴛᴇᴅ!")
+
+
+@app.on_callback_query(filters.regex(r"^close$"))
+async def close_callback(client, callback: CallbackQuery):
+    """Handle close button"""
+    await callback.message.delete()
+    await callback.answer()
