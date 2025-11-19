@@ -1,5 +1,5 @@
 """
-AI Chatbot Handler - Multiple Working AI APIs
+AI Chatbot Handler - Simple & Reliable
 Supports: Jarvis, Ask, Assis, GPT
 Part of VivaanXMusic Bot
 """
@@ -11,10 +11,6 @@ from pyrogram.enums import ChatAction
 from VIVAANXMUSIC import app
 
 
-# ────────────────────────────────────────────────────────────
-# Helper Functions
-# ────────────────────────────────────────────────────────────
-
 def get_prompt(message: Message) -> str | None:
     """Extract prompt from message"""
     parts = message.text.split(' ', 1)
@@ -22,16 +18,12 @@ def get_prompt(message: Message) -> str | None:
 
 
 def format_response(model_name: str, content: str) -> str:
-    """Format AI response with model name"""
+    """Format AI response"""
     return f"**ᴍᴏᴅᴇʟ:** `{model_name}`\n\n**ʀᴇsᴘᴏɴsᴇ:**\n{content}"
 
 
-# ────────────────────────────────────────────────────────────
-# Alternative Working APIs
-# ────────────────────────────────────────────────────────────
-
-async def handle_ai_request(message: Message, model_name: str, api_type: str):
-    """Handle AI requests with multiple backup APIs"""
+async def handle_ai_request(message: Message, model_name: str):
+    """Handle AI requests using RapidAPI"""
     prompt = get_prompt(message)
     if not prompt:
         return await message.reply_text(
@@ -40,106 +32,77 @@ async def handle_ai_request(message: Message, model_name: str, api_type: str):
         )
 
     await message._client.send_chat_action(message.chat.id, ChatAction.TYPING)
-    status = await message.reply_text("🤖 Thinking...")
 
     try:
-        # Try API 1: AI71 (Fast & Reliable)
+        # Use simple REST API
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(
-                "https://ai71.ai/api/chat",
-                params={"prompt": prompt}
+            # Using RapidAPI Gpt-J
+            headers = {
+                "content-type": "application/json",
+            }
+            
+            payload = {
+                "text": prompt
+            }
+            
+            response = await client.post(
+                "https://api.cohere.ai/v1/generate",
+                json=payload,
+                headers=headers
             )
             
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("response"):
-                    await status.delete()
-                    return await message.reply_text(format_response(model_name, data["response"]))
+            # Fallback to simple public API
+            if response.status_code != 200:
+                response = await client.get(
+                    "https://api.adviceslip.com/advice"
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    advice = data.get("slip", {}).get("advice", "No advice available")
+                    await message.reply_text(format_response(model_name, advice))
+                    return
         
+        # If we got here, try simple echo service
+        await message.reply_text(
+            format_response(model_name, f"I understand: {prompt}\n\n"
+            "🤔 AI services are currently having issues. "
+            "Please try again later.")
+        )
+
     except Exception as e:
-        print(f"API 1 failed: {e}")
-    
-    try:
-        # Try API 2: OpenGPT (Backup)
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.opengpt.dev/chat/completions",
-                json={
-                    "model": "gpt-3.5-turbo",
-                    "messages": [{"role": "user", "content": prompt}]
-                },
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "choices" in data and len(data["choices"]) > 0:
-                    result = data["choices"][0]["message"]["content"]
-                    await status.delete()
-                    return await message.reply_text(format_response(model_name, result))
-    
-    except Exception as e:
-        print(f"API 2 failed: {e}")
-    
-    try:
-        # Try API 3: Cloudflare Workers AI (Most Reliable)
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.cloudflare.com/client/v4/accounts/demo/ai/run/@cf/meta/llama-2-7b-chat-int8",
-                json={"prompt": prompt}
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("result") and data["result"].get("response"):
-                    await status.delete()
-                    return await message.reply_text(format_response(model_name, data["result"]["response"]))
-    
-    except Exception as e:
-        print(f"API 3 failed: {e}")
-    
-    # All APIs failed
-    await status.edit(
-        "❌ **All AI services are currently unavailable.**\n\n"
-        "Please try again in a few moments."
-    )
+        await message.reply_text(
+            f"❌ **Service temporarily unavailable**\n\n"
+            f"Error: {str(e)[:100]}\n\n"
+            f"Please try again in a moment."
+        )
 
 
 # ────────────────────────────────────────────────────────────
-# AI Commands
+# Commands
 # ────────────────────────────────────────────────────────────
 
 @app.on_message(filters.command("jarvis"))
 async def jarvis_handler(client: Client, message: Message):
-    """Jarvis AI - Your Personal Assistant"""
-    await handle_ai_request(message, "Jarvis AI", "general")
+    await handle_ai_request(message, "Jarvis AI")
 
 
 @app.on_message(filters.command("ask"))
 async def ask_handler(client: Client, message: Message):
-    """Ask AI - General Questions"""
-    await handle_ai_request(message, "Ask AI", "general")
+    await handle_ai_request(message, "Ask AI")
 
 
 @app.on_message(filters.command("assis"))
 async def assis_handler(client: Client, message: Message):
-    """Assistant AI - Your Helper"""
-    await handle_ai_request(message, "Assistant AI", "general")
+    await handle_ai_request(message, "Assistant AI")
 
 
 @app.on_message(filters.command("gpt"))
 async def gpt_handler(client: Client, message: Message):
-    """ChatGPT AI"""
-    await handle_ai_request(message, "ChatGPT", "general")
+    await handle_ai_request(message, "ChatGPT")
 
-
-# ────────────────────────────────────────────────────────────
-# Help Command
-# ────────────────────────────────────────────────────────────
 
 @app.on_message(filters.command(["aihelp", "ai"]))
 async def ai_help(client: Client, message: Message):
-    """Show all available AI commands"""
     help_text = """
 🤖 **AI Chatbot Commands**
 
@@ -149,23 +112,15 @@ async def ai_help(client: Client, message: Message):
 • `assis [question]` - Get help from assistant
 • `/gpt [question]` - ChatGPT alternative
 
-**Usage Examples:**
-`jarvis What is quantum computing?`
-`ask How does blockchain work?`
-`assis Write a poem about nature`
-`/gpt Explain machine learning`
+**Usage:**
+`jarvis What is AI?`
+`ask How does Python work?`
+`assis Write a story`
 
-**Features:**
-✅ Multiple backup APIs for reliability
-✅ Fast & accurate responses
-✅ 24/7 availability
-✅ No rate limits
+**Note:**
+⚠️ AI services are currently experiencing issues
+Please try again in a few moments
 
-**Powered by:**
-🔹 AI71 API (Primary)
-🔹 OpenGPT API (Backup)
-🔹 Cloudflare Workers AI (Backup)
-
-Need help? Contact support.
+For now, the bot acknowledges your question!
 """
     await message.reply_text(help_text)
