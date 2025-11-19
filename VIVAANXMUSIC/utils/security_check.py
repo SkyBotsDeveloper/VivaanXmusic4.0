@@ -10,54 +10,30 @@ from pyrogram import Client
 from pyrogram.types import User, Message
 
 
-# ==================== LINK DETECTION PATTERNS ====================
+# ==================== COMPREHENSIVE LINK DETECTION PATTERN ====================
 
-# Comprehensive link patterns for bio checking
-LINK_PATTERNS = [
-    r'@\w+',                                    # @mentions and @usernames
-    r't\.me/\w+',                               # Telegram t.me links
-    r'telegram\.me/\w+',                        # Telegram telegram.me links
-    r'tg://\w+',                                # Telegram tg:// protocol
-    r'https?://[^\s]+',                         # HTTP/HTTPS URLs
-    r'www\.[^\s]+',                             # www links
-    
-    # Social Media Platforms
-    r'instagram\.com/[\w\.]+',                  # Instagram
-    r'instagr\.am/[\w\.]+',                     # Instagram short
-    r'tiktok\.com/@\w+',                        # TikTok
-    r'twitter\.com/\w+',                        # Twitter
-    r'x\.com/\w+',                              # X (formerly Twitter)
-    r'facebook\.com/[\w\.]+',                   # Facebook
-    r'fb\.com/[\w\.]+',                         # Facebook short
-    r'youtube\.com/[\w@]+',                     # YouTube
-    r'youtu\.be/[\w]+',                         # YouTube short
-    r'linkedin\.com/in/[\w-]+',                 # LinkedIn
-    r'snapchat\.com/add/\w+',                   # Snapchat
-    r'reddit\.com/u/\w+',                       # Reddit
-    r'twitch\.tv/\w+',                          # Twitch
-    r'discord\.gg/\w+',                         # Discord invites
-    
-    # URL Shorteners
-    r'bit\.ly/\w+',                             # Bitly
-    r'tinyurl\.com/\w+',                        # TinyURL
-    r'goo\.gl/\w+',                             # Google shortener
-    r'ow\.ly/\w+',                              # Owly
-    r'is\.gd/\w+',                              # Is.gd
-    r't\.co/\w+',                               # Twitter shortener
-    
-    # Generic domain patterns
-    r'\w+\.(com|org|net|io|shop|co|me|tv|app|dev|tech|xyz|info|biz|online|site|store|club|live|pro|world|life|today|fun|space|website|email|link|click|digital|download|cloud|host)',
-]
-
-# Compile patterns for performance
-COMPILED_PATTERNS = [re.compile(pattern, re.IGNORECASE) for pattern in LINK_PATTERNS]
+# Enhanced URL pattern from BioAnalyser
+# Detects: @mentions, telegram links, URLs, social media, domains, shorteners
+URL_PATTERN = re.compile(
+    r'(?i)(?:'
+        r'@[a-zA-Z0-9_][a-zA-Z0-9_]{3,31}|'  # @username mentions (4-32 chars)
+        r't\.me/[a-zA-Z0-9_./\-]+|'  # t.me links
+        r'telegram\.me/[a-zA-Z0-9_./\-]+|'  # telegram.me links
+        r'tg\.me/[a-zA-Z0-9_./\-]+|'  # tg.me links
+        r'https?://[^\s]+|'  # http:// or https:// URLs
+        r'www\.[a-zA-Z0-9.\-]+(?:[/?#][^\s]*)?|'  # www.example.com
+        r'(?:bit\.ly|ow\.ly|tinyurl\.com|short\.link|goo\.gl|is\.gd)/[a-zA-Z0-9.\-_]+|'  # URL shorteners
+        r'(?:instagram|tiktok|twitter|facebook|youtube|linkedin|snapchat|discord|twitch|reddit)\.com/[a-zA-Z0-9.\-_~:/?#@!$&\'()*+,;=%]+|'  # Social media
+        r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+(?:com|org|net|io|co|uk|app|dev|shop|xyz|info|biz|online|site|store|club|live|pro|world|life|today|fun|space|website|email|link|click|digital|download|cloud|host)(?:[/?#][^\s]*)?'  # Domain names
+    r')'
+)
 
 
 # ==================== LINK DETECTION FUNCTIONS ====================
 
 def has_link(text: str) -> bool:
     """
-    Check if text contains any links or URLs
+    Check if text contains any links or URLs using comprehensive pattern
     
     Args:
         text (str): Text to check
@@ -68,12 +44,8 @@ def has_link(text: str) -> bool:
     if not text:
         return False
     
-    # Check against all patterns
-    for pattern in COMPILED_PATTERNS:
-        if pattern.search(text):
-            return True
-    
-    return False
+    match = URL_PATTERN.search(text)
+    return match is not None
 
 
 def extract_links(text: str) -> list:
@@ -89,11 +61,7 @@ def extract_links(text: str) -> list:
     if not text:
         return []
     
-    links = []
-    for pattern in COMPILED_PATTERNS:
-        matches = pattern.findall(text)
-        links.extend(matches)
-    
+    links = URL_PATTERN.findall(text)
     return list(set(links))  # Remove duplicates
 
 
@@ -114,6 +82,15 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
         user: User = await client.get_users(user_id)
         bio = user.bio or ""
         contains_link = has_link(bio)
+        
+        # Debug logging
+        if bio:
+            print(f"[Security Debug] User {user_id} bio: '{bio}'")
+            print(f"[Security Debug] Link detected: {contains_link}")
+            if contains_link:
+                links = extract_links(bio)
+                print(f"[Security Debug] Links found: {links}")
+        
         return contains_link, bio
     except Exception as e:
         print(f"[Security] Error checking bio for user {user_id}: {e}")
@@ -268,3 +245,33 @@ def format_links_list(links: list, max_display: int = 5) -> str:
         result += f"\n└ ... and {len(links) - max_display} more"
     
     return result
+
+
+# ==================== TESTING FUNCTION ====================
+
+def test_pattern():
+    """Test function to verify pattern works"""
+    test_cases = [
+        ("Assistant of @xm_musician_bot manage by @itsvivaan", True),
+        ("Check my website.com for more", True),
+        ("Visit t.me/channel", True),
+        ("Instagram: instagram.com/myprofile", True),
+        ("Normal text without links", False),
+        ("Contact me @username", True),
+        ("https://example.com", True),
+        ("www.google.com", True),
+        ("bit.ly/shortlink", True),
+    ]
+    
+    print("\n[Security] Testing URL Pattern:")
+    for text, expected in test_cases:
+        result = has_link(text)
+        status = "✅" if result == expected else "❌"
+        links = extract_links(text) if result else []
+        print(f"{status} '{text}' -> {result} {links}")
+    print()
+
+
+# Run test on import (for debugging)
+if __name__ == "__main__":
+    test_pattern()
