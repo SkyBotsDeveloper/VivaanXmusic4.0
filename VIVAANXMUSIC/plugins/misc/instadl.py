@@ -63,41 +63,37 @@ async def insta_download(client: Client, message: Message):
         if not urls:
             return await processing_msg.edit("⚠️ **No media found!** The link may be invalid or the video may be unavailable.")
 
-        # Get metadata
-        metadata = data.get("metadata", {})
-        original_url = metadata.get("original_url", instagram_url)
-
         # Send media files
         await processing_msg.edit("📤 **Uploading media...**")
         
         for idx, media_url in enumerate(urls):
             try:
+                # Prepare caption without markdown parse mode issues
+                caption = f"📱 Instagram Media ({idx + 1}/{len(urls)})"
+                
                 # Determine media type from URL
-                if media_url.endswith(".mp4"):
+                if media_url.endswith(".mp4") or "video" in media_url.lower():
                     # Send as video
                     await message.reply_video(
                         video=media_url,
-                        caption=f"📱 **Instagram Video** ({idx + 1}/{len(urls)})\n\n[View Original]({original_url})",
-                        parse_mode="markdown"
+                        caption=caption
                     )
                 elif any(media_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
                     # Send as photo
                     await message.reply_photo(
                         photo=media_url,
-                        caption=f"📱 **Instagram Photo** ({idx + 1}/{len(urls)})\n\n[View Original]({original_url})",
-                        parse_mode="markdown"
+                        caption=caption
                     )
                 else:
                     # Unknown format - send as document
                     await message.reply_document(
                         document=media_url,
-                        caption=f"📁 **Instagram Media** ({idx + 1}/{len(urls)})\n\n[View Original]({original_url})",
-                        parse_mode="markdown"
+                        caption=caption
                     )
                     
             except Exception as media_error:
                 await message.reply_text(
-                    f"❌ **Error uploading media {idx + 1}/{len(urls)}:** {str(media_error)[:100]}"
+                    f"❌ Error uploading media {idx + 1}/{len(urls)}: {str(media_error)[:100]}"
                 )
                 continue
 
