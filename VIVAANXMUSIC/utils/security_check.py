@@ -13,18 +13,17 @@ from pyrogram.types import User, Message
 
 # ==================== COMPREHENSIVE LINK DETECTION PATTERN ====================
 
-# Enhanced URL pattern from BioAnalyser
 URL_PATTERN = re.compile(
     r'(?i)(?:'
-        r'@[a-zA-Z0-9_][a-zA-Z0-9_]{3,31}|'  # @username mentions (4-32 chars)
-        r't\.me/[a-zA-Z0-9_./\-]+|'  # t.me links
-        r'telegram\.me/[a-zA-Z0-9_./\-]+|'  # telegram.me links
-        r'tg\.me/[a-zA-Z0-9_./\-]+|'  # tg.me links
-        r'https?://[^\s]+|'  # http:// or https:// URLs
-        r'www\.[a-zA-Z0-9.\-]+(?:[/?#][^\s]*)?|'  # www.example.com
-        r'(?:bit\.ly|ow\.ly|tinyurl\.com|short\.link|goo\.gl|is\.gd)/[a-zA-Z0-9.\-_]+|'  # URL shorteners
-        r'(?:instagram|tiktok|twitter|facebook|youtube|linkedin|snapchat|discord|twitch|reddit)\.com/[a-zA-Z0-9.\-_~:/?#@!$&\'()*+,;=%]+|'  # Social media
-        r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+(?:com|org|net|io|co|uk|app|dev|shop|xyz|info|biz|online|site|store|club|live|pro|world|life|today|fun|space|website|email|link|click|digital|download|cloud|host)(?:[/?#][^\s]*)?'  # Domain names
+        r'@[a-zA-Z0-9_][a-zA-Z0-9_]{3,31}|'
+        r't\.me/[a-zA-Z0-9_./\-]+|'
+        r'telegram\.me/[a-zA-Z0-9_./\-]+|'
+        r'tg\.me/[a-zA-Z0-9_./\-]+|'
+        r'https?://[^\s]+|'
+        r'www\.[a-zA-Z0-9.\-]+(?:[/?#][^\s]*)?|'
+        r'(?:bit\.ly|ow\.ly|tinyurl\.com|short\.link|goo\.gl|is\.gd)/[a-zA-Z0-9.\-_]+|'
+        r'(?:instagram|tiktok|twitter|facebook|youtube|linkedin|snapchat|discord|twitch|reddit)\.com/[a-zA-Z0-9.\-_~:/?#@!$&\'()*+,;=%]+|'
+        r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+(?:com|org|net|io|co|uk|app|dev|shop|xyz|info|biz|online|site|store|club|live|pro|world|life|today|fun|space|website|email|link|click|digital|download|cloud|host)(?:[/?#][^\s]*)?'
     r')'
 )
 
@@ -46,40 +45,77 @@ def extract_links(text: str) -> list:
     return list(set(links))
 
 
-# ==================== BIO CHECKING (USING USERBOT) ====================
+# ==================== USERBOT ACCESS ====================
+
+_userbot_instance = None
+
+def get_userbot_instance():
+    """Get or create the Userbot instance"""
+    global _userbot_instance
+    if _userbot_instance is None:
+        from VIVAANXMUSIC.core.userbot import Userbot
+        _userbot_instance = Userbot()
+    return _userbot_instance
+
+
+async def get_userbot_client():
+    """Get the first available userbot client"""
+    try:
+        import config
+        
+        # Get the userbot instance
+        userbot = get_userbot_instance()
+        
+        # Try to use the first available client
+        if config.STRING1:
+            print(f"[Security] Using userbot client 'one'")
+            return userbot.one
+        elif config.STRING2:
+            print(f"[Security] Using userbot client 'two'")
+            return userbot.two
+        elif config.STRING3:
+            print(f"[Security] Using userbot client 'three'")
+            return userbot.three
+        elif config.STRING4:
+            print(f"[Security] Using userbot client 'four'")
+            return userbot.four
+        elif config.STRING5:
+            print(f"[Security] Using userbot client 'five'")
+            return userbot.five
+        else:
+            print(f"[Security] WARNING: No userbot session strings configured!")
+            return None
+            
+    except Exception as e:
+        print(f"[Security] Error getting userbot client: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+# ==================== BIO CHECKING ====================
 
 async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
     """
     Check if user's bio contains links
     Uses USERBOT client to access full bio data
-    
-    Args:
-        client (Client): Pyrogram client (bot client)
-        user_id (int): User ID to check
-        
-    Returns:
-        Tuple[bool, str]: (has_link, bio_text)
     """
     try:
-        # Import the assistants list from your bot structure
-        from VIVAANXMUSIC.core.userbot import assistants
+        # Get userbot client
+        userbot = await get_userbot_client()
         
-        # Try to get user bio using assistant (userbot)
         user = None
         
-        # assistants is a list of userbot clients in VivaanXmusic
-        if assistants:
-            # Try with first assistant
+        if userbot:
             try:
-                user = await assistants[0].get_users(user_id)
-                print(f"[Security] Successfully got bio using assistant for user {user_id}")
+                user = await userbot.get_users(user_id)
+                print(f"[Security] ✅ Successfully got bio using userbot for user {user_id}")
             except Exception as e:
-                print(f"[Security] Assistant failed, trying bot client: {e}")
-                # Fallback to bot client
+                print(f"[Security] Userbot failed: {e}, trying bot client")
                 user = await client.get_users(user_id)
         else:
-            # No assistants available, use bot client
-            print(f"[Security] No assistants available, using bot client")
+            # No userbot, use bot client (won't work for bot accounts)
+            print(f"[Security] No userbot available, using bot client")
             user = await client.get_users(user_id)
         
         bio = user.bio or ""
@@ -93,7 +129,7 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
                 links = extract_links(bio)
                 print(f"[Security] Links found: {links}")
         else:
-            print(f"[Security] User {user_id} has no bio")
+            print(f"[Security] User {user_id} ({user.first_name}) has no bio")
         
         return contains_link, bio
         
@@ -107,16 +143,16 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
 async def check_bio_detailed(client: Client, user_id: int) -> dict:
     """Check user bio with detailed information using userbot"""
     try:
-        # Import the assistants list
-        from VIVAANXMUSIC.core.userbot import assistants
+        userbot = await get_userbot_client()
         
         user = None
         
-        if assistants:
+        if userbot:
             try:
-                user = await assistants[0].get_users(user_id)
+                user = await userbot.get_users(user_id)
+                print(f"[Security] ✅ Detailed scan using userbot for user {user_id}")
             except Exception as e:
-                print(f"[Security] Assistant failed in detailed check: {e}")
+                print(f"[Security] Userbot failed in detailed check: {e}")
                 user = await client.get_users(user_id)
         else:
             user = await client.get_users(user_id)
