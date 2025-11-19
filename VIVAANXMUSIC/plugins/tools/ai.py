@@ -1,114 +1,130 @@
-import os
-import base64
-import mimetypes
+"""
+AI Chatbot Handler - Multiple AI Models Support
+Supports: Jarvis (Felo AI), Ask (Ninja AI), Assis (Meta AI)
+Part of VivaanXMusic Bot
+"""
 
+import httpx
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from pyrogram.enums import ChatAction
-
-from lexica import AsyncClient, languageModels, Messages
 from VIVAANXMUSIC import app
 
 
+# ────────────────────────────────────────────────────────────
+# Helper Functions
+# ────────────────────────────────────────────────────────────
+
 def get_prompt(message: Message) -> str | None:
+    """Extract prompt from message"""
     parts = message.text.split(' ', 1)
     return parts[1] if len(parts) > 1 else None
 
 
-def extract_content(response) -> str | None:
-    content = response.get('content')
-    if isinstance(content, str):
-        return content
-    elif isinstance(content, list):
-        return '\n'.join(item['text'] for item in content if isinstance(item, dict) and 'text' in item)
-    elif isinstance(content, dict):
-        if 'parts' in content and isinstance(content['parts'], list):
-            return '\n'.join(part.get('text', '') for part in content['parts'] if 'text' in part)
-        return content.get('text')
-    return None
-
-
 def format_response(model_name: str, content: str) -> str:
+    """Format AI response with model name"""
     return f"**ᴍᴏᴅᴇʟ:** `{model_name}`\n\n**ʀᴇsᴘᴏɴsᴇ:**\n{content}"
 
 
-async def handle_text_model(message: Message, model, model_name: str, as_messages=False):
+# ────────────────────────────────────────────────────────────
+# Yabes API Handler
+# ────────────────────────────────────────────────────────────
+
+YABES_API_BASE = "https://yabes-api.pages.dev"
+
+async def handle_yabes_api(message: Message, endpoint: str, model_name: str):
+    """Handle Yabes API-based models"""
     prompt = get_prompt(message)
     if not prompt:
-        return await message.reply_text("Please provide a prompt after the command.")
+        return await message.reply_text("❌ **Usage:** `command [your question]`\n\n**Example:** `jarvis What is AI?`")
 
     await message._client.send_chat_action(message.chat.id, ChatAction.TYPING)
 
-    lexica_client = AsyncClient()
     try:
-        data = [Messages(content=prompt, role="user")] if as_messages else prompt
-        response = await lexica_client.ChatCompletion(data, model)
-        content = extract_content(response)
-        await message.reply_text(format_response(model_name, content) if content else "No content received from the API.")
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{YABES_API_BASE}{endpoint}",
+                json={"prompt": prompt}
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        # Extract response
+        if data.get("status") and "result" in data:
+            result = data["result"]
+            await message.reply_text(format_response(model_name, result))
+        else:
+            await message.reply_text(f"⚠️ **{model_name}** returned no content. Try again.")
+
+    except httpx.TimeoutException:
+        await message.reply_text("❌ **Timeout Error!** The API took too long to respond. Please try again.")
+    except httpx.HTTPStatusError as e:
+        await message.reply_text(f"❌ **HTTP Error {e.response.status_code}!** API is currently unavailable.")
     except Exception as e:
-        await message.reply_text(f"An error occurred: {e}")
-    finally:
-        await lexica_client.close()
+        await message.reply_text(f"❌ **Error:** {str(e)[:200]}")
 
 
-@app.on_message(filters.command("bard"))
-async def bard_handler(client: Client, message: Message):
-    await handle_text_model(message, languageModels.bard, "Bard")
+# ────────────────────────────────────────────────────────────
+# AI Commands (Your Original Commands)
+# ────────────────────────────────────────────────────────────
+
+@app.on_message(filters.command("jarvis"))
+async def jarvis_handler(client: Client, message: Message):
+    """Jarvis AI - Your Personal Assistant (Felo AI)"""
+    await handle_yabes_api(message, "/api/ai/chat/felo-ai", "Jarvis AI")
 
 
-@app.on_message(filters.command("gemini"))
-async def gemini_handler(client: Client, message: Message):
-    await handle_text_model(message, languageModels.gemini, "Gemini", as_messages=True)
+@app.on_message(filters.command("ask"))
+async def ask_handler(client: Client, message: Message):
+    """Ask AI - General Questions (Ninja AI)"""
+    await handle_yabes_api(message, "/api/ai/chat/ninja-ai", "Ask AI")
+
+
+@app.on_message(filters.command("assis"))
+async def assis_handler(client: Client, message: Message):
+    """Assistant AI - Your Helper (Meta AI)"""
+    await handle_yabes_api(message, "/api/ai/chat/meta-ai", "Assistant AI")
 
 
 @app.on_message(filters.command("gpt"))
 async def gpt_handler(client: Client, message: Message):
-    await handle_text_model(message, languageModels.gpt, "GPT", as_messages=True)
+    """ChatGPT AI - Alias for Felo AI"""
+    await handle_yabes_api(message, "/api/ai/chat/felo-ai", "ChatGPT")
 
 
-@app.on_message(filters.command("llama"))
-async def llama_handler(client: Client, message: Message):
-    await handle_text_model(message, languageModels.llama, "LLaMA", as_messages=True)
+# ────────────────────────────────────────────────────────────
+# Help Command
+# ────────────────────────────────────────────────────────────
 
+@app.on_message(filters.command(["aihelp", "ai"]))
+async def ai_help(client: Client, message: Message):
+    """Show all available AI commands"""
+    help_text = """
+🤖 **AI Chatbot Commands**
 
-@app.on_message(filters.command("mistral"))
-async def mistral_handler(client: Client, message: Message):
-    await handle_text_model(message, languageModels.mistral, "Mistral", as_messages=True)
+**Main Commands:**
+• `jarvis [question]` - Your personal AI assistant
+• `ask [question]` - Ask any question
+• `assis [question]` - Get help from assistant
+• `/gpt [question]` - ChatGPT alternative
 
+**Usage Examples:**
+`jarvis What is quantum computing?`
+`ask How does blockchain work?`
+`assis Write a poem about nature`
+`/gpt Explain machine learning`
 
-@app.on_message(filters.command("geminivision"))
-async def geminivision_handler(client: Client, message: Message):
-    if not (message.reply_to_message and message.reply_to_message.photo):
-        return await message.reply_text("Please reply to an image with the /geminivision command and a prompt.")
+**Features:**
+✅ Fast & accurate responses
+✅ Multiple AI models
+✅ No rate limits
+✅ 24/7 availability
 
-    prompt = get_prompt(message)
-    if not prompt:
-        return await message.reply_text("Please provide a prompt after the command.")
+**Powered by:**
+🔹 Felo AI (jarvis, /gpt)
+🔹 Ninja AI (ask)
+🔹 Meta AI (assis)
 
-    await client.send_chat_action(message.chat.id, ChatAction.TYPING)
-    status = await message.reply_text("Processing your image, please wait...")
-
-
-    try:
-        file_path = await client.download_media(message.reply_to_message.photo.file_id)
-    except Exception as e:
-        await status.delete()
-        return await message.reply_text(f"❌ Failed to download image.\nError: {e}")
-
-    lexica_client = AsyncClient()
-
-    try:
-        with open(file_path, "rb") as f:
-            data = base64.b64encode(f.read()).decode()
-        mime_type, _ = mimetypes.guess_type(file_path)
-        image_info = [{"data": data, "mime_type": mime_type}]
-
-        response = await lexica_client.ChatCompletion(prompt, languageModels.geminiVision, images=image_info)
-        content = extract_content(response)
-        await message.reply_text(format_response("Gemini Vision", content) if content else "No content received from the API.")
-    except Exception as e:
-        await message.reply_text(f"An error occurred: {e}")
-    finally:
-        await status.delete()
-        await lexica_client.close()
-        os.remove(file_path)
+Need help? Contact support.
+"""
+    await message.reply_text(help_text)
