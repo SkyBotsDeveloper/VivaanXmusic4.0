@@ -468,8 +468,7 @@ async def auto_bio_check(client, message: Message):
                 f"{action_emoji} **{action_text}**\n\n"
                 f"**ᴜsᴇʀ:** {message.from_user.mention}\n"
                 f"**ʀᴇᴀsᴏɴ:** ʟɪɴᴋ ɪɴ ʙɪᴏ\n"
-                f"**ᴡᴀʀɴɪɴɢs:** `{warn_count}/{limit}`\n\n"
-                f"_ʙɪᴏ ᴘʀᴇᴠɪᴇᴡ: {clean_bio_preview(bio, 80)}_",
+                f"**ᴡᴀʀɴɪɴɢs:** `{warn_count}/{limit}`",
                 disable_web_page_preview=True
             )
         
@@ -499,7 +498,7 @@ async def auto_bio_check(client, message: Message):
                 f"**ᴜsᴇʀ:** {message.from_user.mention}\n"
                 f"**ʀᴇᴀsᴏɴ:** ʟɪɴᴋ ᴅᴇᴛᴇᴄᴛᴇᴅ ɪɴ ʙɪᴏ\n\n"
                 f"ʀᴇᴍᴏᴠᴇ ʟɪɴᴋs ғʀᴏᴍ ʏᴏᴜʀ ʙɪᴏ ᴏʀ ғᴀᴄᴇ {action}.\n"
-                f"_ʙɪᴏ ᴘʀᴇᴠɪᴇᴡ: {clean_bio_preview(bio, 80)}_",
+                f"Apne bio se link hatane ki kripa kare.",
                 disable_web_page_preview=True,
                 reply_markup=keyboard
             )
