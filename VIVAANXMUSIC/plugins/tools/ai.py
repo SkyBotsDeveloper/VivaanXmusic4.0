@@ -1,5 +1,5 @@
 """
-AI Chatbot Handler - Google Gemini Flash (Free & Working)
+AI Chatbot Handler - Yabes API (Properly Implemented)
 Supports: Jarvis, Ask, Assis, GPT
 Part of VivaanXMusic Bot
 """
@@ -19,15 +19,14 @@ def get_prompt(message: Message) -> str | None:
 
 def format_response(model_name: str, content: str) -> str:
     """Format AI response"""
-    # Clean up response
     content = content.strip()
-    if len(content) > 4000:  # Telegram message limit
+    if len(content) > 4000:
         content = content[:3997] + "..."
     return f"**{model_name}:**\n\n{content}"
 
 
-async def handle_ai_request(message: Message, model_name: str):
-    """Handle AI requests using free Google Gemini API"""
+async def handle_ai_request(message: Message, model_name: str, api_endpoint: str):
+    """Handle AI requests using Yabes API"""
     prompt = get_prompt(message)
     if not prompt:
         return await message.reply_text(
@@ -38,98 +37,90 @@ async def handle_ai_request(message: Message, model_name: str):
     await message._client.send_chat_action(message.chat.id, ChatAction.TYPING)
 
     try:
-        # Use free Gemini Flash API
+        # Yabes API - Correct implementation
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
-                params={"key": "AIzaSyDYbidXKIPzhjbqiW80EaZZEhSP-xHN_dk"},  # Free public API key
-                json={
-                    "contents": [{
-                        "parts": [{
-                            "text": prompt
-                        }]
-                    }]
-                },
+                f"https://yabes-api.pages.dev{api_endpoint}",
+                json={"prompt": prompt},
                 headers={"Content-Type": "application/json"}
             )
             
             if response.status_code == 200:
                 data = response.json()
                 
-                # Extract AI response
-                if "candidates" in data and len(data["candidates"]) > 0:
-                    candidate = data["candidates"][0]
-                    if "content" in candidate and "parts" in candidate["content"]:
-                        parts = candidate["content"]["parts"]
-                        if len(parts) > 0 and "text" in parts[0]:
-                            result = parts[0]["text"]
-                            await message.reply_text(format_response(model_name, result))
-                            return
+                # Extract result based on API response structure
+                if data.get("status") == True and "result" in data:
+                    result = data["result"]
+                    await message.reply_text(format_response(model_name, result))
+                    return
+                elif "result" in data:
+                    result = data["result"]
+                    await message.reply_text(format_response(model_name, result))
+                    return
             
-            # If we get here, something went wrong
+            # Error response
             await message.reply_text(
-                "❌ **Failed to get AI response**\n\n"
+                f"❌ **API Error**\n\n"
                 f"Status: {response.status_code}\n"
-                "Please try again."
+                f"Response: {response.text[:200]}"
             )
 
     except httpx.TimeoutException:
-        await message.reply_text("❌ **Timeout!** Please try a shorter question.")
+        await message.reply_text("❌ **Timeout!** Please try again.")
     except Exception as e:
-        await message.reply_text(f"❌ **Error:** {str(e)[:150]}")
+        await message.reply_text(f"❌ **Error:** {str(e)[:200]}")
 
 
 # ────────────────────────────────────────────────────────────
-# Commands
+# Commands - Each uses different AI model
 # ────────────────────────────────────────────────────────────
 
 @app.on_message(filters.command("jarvis"))
 async def jarvis_handler(client: Client, message: Message):
-    """Jarvis AI"""
-    await handle_ai_request(message, "🤖 Jarvis AI")
+    """Jarvis AI - Felo AI"""
+    await handle_ai_request(message, "🤖 Jarvis AI", "/api/ai/chat/felo-ai")
 
 
 @app.on_message(filters.command("ask"))
 async def ask_handler(client: Client, message: Message):
-    """Ask AI"""
-    await handle_ai_request(message, "💬 Ask AI")
+    """Ask AI - Ninja AI"""
+    await handle_ai_request(message, "💬 Ask AI", "/api/ai/chat/ninja-ai")
 
 
 @app.on_message(filters.command("assis"))
 async def assis_handler(client: Client, message: Message):
-    """Assistant AI"""
-    await handle_ai_request(message, "🎯 Assistant")
+    """Assistant AI - Meta AI"""
+    await handle_ai_request(message, "🎯 Assistant", "/api/ai/chat/meta-ai")
 
 
 @app.on_message(filters.command("gpt"))
 async def gpt_handler(client: Client, message: Message):
-    """ChatGPT"""
-    await handle_ai_request(message, "✨ ChatGPT")
+    """ChatGPT - Felo AI"""
+    await handle_ai_request(message, "✨ ChatGPT", "/api/ai/chat/felo-ai")
 
 
 @app.on_message(filters.command(["aihelp", "ai"]))
 async def ai_help(client: Client, message: Message):
     """AI Help"""
     help_text = """
-🤖 **AI Chatbot - Powered by Google Gemini Flash**
+🤖 **AI Chatbot - Yabes API**
 
 **Commands:**
-• `jarvis [question]` - Ask anything
-• `ask [question]` - General questions
-• `assis [question]` - Get assistance
+• `jarvis [question]` - Felo AI (Advanced)
+• `ask [question]` - Ninja AI (Fast)
+• `assis [question]` - Meta AI (Smart)
 • `/gpt [question]` - ChatGPT style
 
 **Examples:**
-`jarvis What is the moon?`
-`ask Explain AI in simple terms`
+`jarvis What is quantum computing?`
+`ask Tell me a joke`
 `assis Write a poem`
-`/gpt Tell me a joke`
+`/gpt Explain AI`
 
-**✅ Features:**
-• Instant responses (no loading!)
-• Powered by Google Gemini Flash
-• Free unlimited usage
-• Smart & accurate answers
+**✅ Powered by:**
+🔹 Felo AI (jarvis, /gpt)
+🔹 Ninja AI (ask)
+🔹 Meta AI (assis)
 
 **Try it now!** 🚀
 """
