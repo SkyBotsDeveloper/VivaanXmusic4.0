@@ -1,13 +1,12 @@
 """
-Security Check Utilities - BioAnalyser Integration
-Bio link detection using USERBOT with proper peer handling
+Security Check Utilities - Bio link detection
+Uses bot client with get_chat() to read bios (BioAnalyser approach)
 """
 
 import re
 from typing import Tuple, Optional
 from pyrogram import Client
 from pyrogram.types import User, Message
-from pyrogram.errors import PeerIdInvalid
 
 
 # ==================== COMPREHENSIVE LINK DETECTION PATTERN ====================
@@ -44,78 +43,17 @@ def extract_links(text: str) -> list:
     return list(set(links))
 
 
-# ==================== BIO CHECKING WITH USERBOT ====================
+# ==================== BIO CHECKING (BioAnalyser Method) ====================
 
 async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
     """
     Check if user's bio contains links
-    Uses USERBOT with proper peer handling
+    Uses get_chat() method (same as BioAnalyser)
     """
     try:
-        # First get user info from bot client (has peer cached)
-        try:
-            bot_user = await client.get_users(user_id)
-        except Exception as e:
-            print(f"[Security] Bot client get_users failed: {e}")
-            return False, ""
-        
-        # Import global userbot instance
-        from VIVAANXMUSIC import userbot
-        from VIVAANXMUSIC.core.userbot import assistants
-        
-        # Check if userbot is available
-        if not assistants:
-            print(f"[Security] No userbot assistants available")
-            return False, ""
-        
-        # Use first available assistant
-        userclient = None
-        if 1 in assistants:
-            userclient = userbot.one
-        elif 2 in assistants:
-            userclient = userbot.two
-        elif 3 in assistants:
-            userclient = userbot.three
-        elif 4 in assistants:
-            userclient = userbot.four
-        elif 5 in assistants:
-            userclient = userbot.five
-        
-        if not userclient:
-            print(f"[Security] No userbot client found")
-            return False, ""
-        
-        # Try to get user with userbot
-        # Strategy: Try username first, then user_id
-        user = None
-        bio = ""
-        
-        if bot_user.username:
-            # Try with username (more reliable)
-            try:
-                user = await userclient.get_users(bot_user.username)
-                bio = user.bio or ""
-                print(f"[Security] ✅ Got bio via username for {user.first_name}")
-            except PeerIdInvalid:
-                print(f"[Security] Username lookup failed, trying direct ID")
-                pass
-            except Exception as e:
-                print(f"[Security] Username lookup error: {e}")
-                pass
-        
-        # If username failed or not available, try user_id
-        if not user:
-            try:
-                user = await userclient.get_users(user_id)
-                bio = user.bio or ""
-                print(f"[Security] ✅ Got bio via user_id for {user.first_name}")
-            except PeerIdInvalid:
-                # Userbot doesn't know this peer
-                print(f"[Security] ⚠️ Peer {user_id} unknown to userbot (hasn't met yet)")
-                return False, ""
-            except Exception as e:
-                print(f"[Security] User_id lookup error: {e}")
-                return False, ""
+        # Use get_chat() instead of get_users() - this can read bios!
+        user = await client.get_chat(user_id)
+        bio = user.bio or ""
         
         if not bio:
             return False, ""
@@ -134,106 +72,10 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
 
 
 async def check_bio_detailed(client: Client, user_id: int) -> dict:
-    """Detailed bio check"""
+    """Detailed bio check using get_chat()"""
     try:
-        # Get user from bot first
-        try:
-            bot_user = await client.get_users(user_id)
-        except Exception as e:
-            print(f"[Security] Bot client error: {e}")
-            return {
-                "has_link": False,
-                "bio": "Error: User not found",
-                "links": [],
-                "link_count": 0,
-                "username": None,
-                "user_id": user_id,
-                "first_name": "Unknown",
-                "is_bot": False
-            }
-        
-        from VIVAANXMUSIC import userbot
-        from VIVAANXMUSIC.core.userbot import assistants
-        
-        if not assistants:
-            return {
-                "has_link": False,
-                "bio": "Userbot unavailable",
-                "links": [],
-                "link_count": 0,
-                "username": bot_user.username,
-                "user_id": user_id,
-                "first_name": bot_user.first_name,
-                "is_bot": bot_user.is_bot
-            }
-        
-        # Get userbot client
-        userclient = None
-        if 1 in assistants:
-            userclient = userbot.one
-        elif 2 in assistants:
-            userclient = userbot.two
-        elif 3 in assistants:
-            userclient = userbot.three
-        elif 4 in assistants:
-            userclient = userbot.four
-        elif 5 in assistants:
-            userclient = userbot.five
-        
-        if not userclient:
-            return {
-                "has_link": False,
-                "bio": "Userbot client not found",
-                "links": [],
-                "link_count": 0,
-                "username": bot_user.username,
-                "user_id": user_id,
-                "first_name": bot_user.first_name,
-                "is_bot": bot_user.is_bot
-            }
-        
-        # Try to get user with userbot
-        user = None
-        bio = ""
-        
-        # Try username first
-        if bot_user.username:
-            try:
-                user = await userclient.get_users(bot_user.username)
-                bio = user.bio or ""
-            except:
-                pass
-        
-        # Try user_id if username failed
-        if not user:
-            try:
-                user = await userclient.get_users(user_id)
-                bio = user.bio or ""
-            except PeerIdInvalid:
-                # Peer not known to userbot
-                return {
-                    "has_link": False,
-                    "bio": "⚠️ User not in userbot cache (need common group/interaction)",
-                    "links": [],
-                    "link_count": 0,
-                    "username": bot_user.username,
-                    "user_id": user_id,
-                    "first_name": bot_user.first_name,
-                    "is_bot": bot_user.is_bot
-                }
-            except Exception as e:
-                print(f"[Security] Detailed check error: {e}")
-                return {
-                    "has_link": False,
-                    "bio": f"Error: {str(e)[:50]}",
-                    "links": [],
-                    "link_count": 0,
-                    "username": bot_user.username,
-                    "user_id": user_id,
-                    "first_name": bot_user.first_name,
-                    "is_bot": bot_user.is_bot
-                }
-        
+        user = await client.get_chat(user_id)
+        bio = user.bio or ""
         links_found = extract_links(bio)
         
         print(f"[Security] Detailed scan: {user.first_name} | Bio: '{bio}' | Links: {links_found}")
@@ -243,17 +85,17 @@ async def check_bio_detailed(client: Client, user_id: int) -> dict:
             "bio": bio if bio else "No bio",
             "links": links_found,
             "link_count": len(links_found),
-            "username": user.username,
+            "username": user.username if hasattr(user, 'username') else None,
             "user_id": user.id,
             "first_name": user.first_name,
-            "is_bot": user.is_bot
+            "is_bot": False  # get_chat doesn't have is_bot, assume false
         }
         
     except Exception as e:
         print(f"[Security] Detailed check error: {e}")
         return {
             "has_link": False,
-            "bio": "Error",
+            "bio": f"Error: {str(e)[:50]}",
             "links": [],
             "link_count": 0,
             "username": None,
