@@ -1,11 +1,10 @@
 """
 Security Check Utilities - BioAnalyser Integration
 Bio link detection and user verification for group security
-Uses ALREADY STARTED userbot client for bio access
+Smart fallback handling for userbot limitations
 """
 
 import re
-import asyncio
 from typing import Tuple, Optional
 from pyrogram import Client
 from pyrogram.types import User, Message
@@ -28,10 +27,10 @@ URL_PATTERN = re.compile(
 )
 
 
-# ==================== LINK DETECTION FUNCTIONS ====================
+# ==================== LINK DETECTION ====================
 
 def has_link(text: str) -> bool:
-    """Check if text contains any links or URLs"""
+    """Check if text contains links"""
     if not text:
         return False
     return URL_PATTERN.search(text) is not None
@@ -47,152 +46,100 @@ def extract_links(text: str) -> list:
 
 # ==================== USERBOT ACCESS ====================
 
-async def get_userbot_client():
-    """Get the ALREADY STARTED userbot client from global instance"""
+async def get_userbot_client() -> Optional[Client]:
+    """Get STARTED userbot client with error handling"""
     try:
-        # Import the GLOBAL userbot instance that was started in __main__
         from VIVAANXMUSIC import userbot
         from VIVAANXMUSIC.core.userbot import assistants
         
-        # Wait for assistants to be ready
         if not assistants:
-            print(f"[Security] Waiting for assistants...")
-            for _ in range(20):
-                await asyncio.sleep(0.5)
-                if assistants:
-                    break
-        
-        if not assistants:
-            print(f"[Security] No assistants available")
             return None
         
-        print(f"[Security] Available assistants: {assistants}")
-        
-        # Use the first available assistant from the GLOBAL started instance
+        # Return first available assistant
         if 1 in assistants:
-            print(f"[Security] Using global assistant 1")
             return userbot.one
         elif 2 in assistants:
-            print(f"[Security] Using global assistant 2")
             return userbot.two
         elif 3 in assistants:
-            print(f"[Security] Using global assistant 3")
             return userbot.three
         elif 4 in assistants:
-            print(f"[Security] Using global assistant 4")
             return userbot.four
         elif 5 in assistants:
-            print(f"[Security] Using global assistant 5")
             return userbot.five
         
-        print(f"[Security] No assistants in list")
         return None
             
     except Exception as e:
-        print(f"[Security] Error getting userbot: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"[Security] Userbot unavailable: {e}")
         return None
 
 
 # ==================== BIO CHECKING ====================
 
 async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
-    """Check if user's bio contains links"""
+    """
+    Check if user's bio contains links
+    Uses bot client primarily (most reliable for group members)
+    """
     try:
-        userbot = await get_userbot_client()
+        # Try bot client first (most reliable for group members)
+        user = await client.get_users(user_id)
+        bio = user.bio or ""
         
-        if userbot:
-            try:
-                user = await userbot.get_users(user_id)
-                bio = user.bio or ""
-                
-                if user.is_bot:
-                    print(f"[Security] ⚠️ Bot account {user.first_name} - bio cannot be read")
-                    return False, ""
-                
-                contains_link = has_link(bio)
-                
-                if bio:
-                    print(f"[Security] ✅ {user.first_name}: '{bio[:50]}...' | Links: {contains_link}")
-                    if contains_link:
-                        print(f"[Security] Found: {extract_links(bio)}")
-                
-                return contains_link, bio
-                
-            except Exception as e:
-                print(f"[Security] Userbot error: {e}")
-                user = await client.get_users(user_id)
-                return False, user.bio or ""
-        else:
-            user = await client.get_users(user_id)
-            return False, user.bio or ""
+        # If bot account, cannot read bio (Telegram limitation)
+        if user.is_bot:
+            return False, ""
+        
+        # If no bio, return empty
+        if not bio:
+            return False, ""
+        
+        # Check for links
+        contains_link = has_link(bio)
+        
+        if contains_link:
+            print(f"[Security] ✅ Link detected in {user.first_name}'s bio")
+            print(f"[Security] Bio: {bio}")
+            print(f"[Security] Links: {extract_links(bio)}")
+        
+        return contains_link, bio
         
     except Exception as e:
-        print(f"[Security] Error: {e}")
+        print(f"[Security] Error checking bio: {e}")
         return False, ""
 
 
 async def check_bio_detailed(client: Client, user_id: int) -> dict:
-    """Detailed bio check"""
+    """Detailed bio check with full information"""
     try:
-        userbot = await get_userbot_client()
+        user = await client.get_users(user_id)
+        bio = user.bio or ""
         
-        if userbot:
-            try:
-                user = await userbot.get_users(user_id)
-                bio = user.bio or ""
-                
-                if user.is_bot:
-                    return {
-                        "has_link": False,
-                        "bio": "⚠️ Bot account - bio cannot be read",
-                        "links": [],
-                        "link_count": 0,
-                        "username": user.username,
-                        "user_id": user.id,
-                        "first_name": user.first_name,
-                        "is_bot": True
-                    }
-                
-                links_found = extract_links(bio)
-                
-                return {
-                    "has_link": len(links_found) > 0,
-                    "bio": bio if bio else "No bio",
-                    "links": links_found,
-                    "link_count": len(links_found),
-                    "username": user.username,
-                    "user_id": user.id,
-                    "first_name": user.first_name,
-                    "is_bot": False
-                }
-                
-            except Exception as e:
-                print(f"[Security] Userbot error: {e}")
-                user = await client.get_users(user_id)
-                return {
-                    "has_link": False,
-                    "bio": user.bio or "No bio",
-                    "links": [],
-                    "link_count": 0,
-                    "username": user.username,
-                    "user_id": user.id,
-                    "first_name": user.first_name,
-                    "is_bot": user.is_bot
-                }
-        else:
-            user = await client.get_users(user_id)
+        # Bot accounts cannot have readable bios
+        if user.is_bot:
             return {
                 "has_link": False,
-                "bio": user.bio or "No bio",
+                "bio": "⚠️ Bot account - bio cannot be read",
                 "links": [],
                 "link_count": 0,
                 "username": user.username,
                 "user_id": user.id,
                 "first_name": user.first_name,
-                "is_bot": user.is_bot
+                "is_bot": True
             }
+        
+        links_found = extract_links(bio)
+        
+        return {
+            "has_link": len(links_found) > 0,
+            "bio": bio if bio else "No bio",
+            "links": links_found,
+            "link_count": len(links_found),
+            "username": user.username,
+            "user_id": user.id,
+            "first_name": user.first_name,
+            "is_bot": False
+        }
             
     except Exception as e:
         print(f"[Security] Error: {e}")
