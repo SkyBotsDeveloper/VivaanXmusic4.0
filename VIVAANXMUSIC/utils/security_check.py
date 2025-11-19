@@ -6,6 +6,7 @@ Part of VivaanXMusic Group Management System
 """
 
 import re
+import asyncio
 from typing import Tuple, Optional
 from pyrogram import Client
 from pyrogram.types import User, Message
@@ -47,43 +48,54 @@ def extract_links(text: str) -> list:
 
 # ==================== USERBOT ACCESS ====================
 
-_userbot_instance = None
-
-def get_userbot_instance():
-    """Get or create the Userbot instance"""
-    global _userbot_instance
-    if _userbot_instance is None:
-        from VIVAANXMUSIC.core.userbot import Userbot
-        _userbot_instance = Userbot()
-    return _userbot_instance
-
-
 async def get_userbot_client():
-    """Get the first available and STARTED userbot client"""
+    """Get the first available STARTED userbot client"""
     try:
         import config
+        from VIVAANXMUSIC.core.userbot import Userbot, assistants
+        
+        # Check if any assistants are started
+        if not assistants:
+            print(f"[Security] WARNING: No assistants started yet, waiting...")
+            # Wait up to 5 seconds for assistants to start
+            for _ in range(10):
+                await asyncio.sleep(0.5)
+                if assistants:
+                    break
+            
+            if not assistants:
+                print(f"[Security] ERROR: No assistants available after waiting")
+                return None
         
         # Get the userbot instance
-        userbot = get_userbot_instance()
+        userbot = Userbot()
         
-        # Try to use the first available client that has a session string
-        if config.STRING1:
-            print(f"[Security] Using userbot client 'one'")
-            return userbot.one
-        elif config.STRING2:
-            print(f"[Security] Using userbot client 'two'")
+        # Use the first started assistant
+        if 1 in assistants and config.STRING1:
+            print(f"[Security] Using started assistant 'one'")
+            client = userbot.one
+            # Check if started
+            if not client.is_connected:
+                print(f"[Security] Assistant 'one' not connected, trying to use anyway...")
+            return client
+            
+        elif 2 in assistants and config.STRING2:
+            print(f"[Security] Using started assistant 'two'")
             return userbot.two
-        elif config.STRING3:
-            print(f"[Security] Using userbot client 'three'")
+            
+        elif 3 in assistants and config.STRING3:
+            print(f"[Security] Using started assistant 'three'")
             return userbot.three
-        elif config.STRING4:
-            print(f"[Security] Using userbot client 'four'")
+            
+        elif 4 in assistants and config.STRING4:
+            print(f"[Security] Using started assistant 'four'")
             return userbot.four
-        elif config.STRING5:
-            print(f"[Security] Using userbot client 'five'")
+            
+        elif 5 in assistants and config.STRING5:
+            print(f"[Security] Using started assistant 'five'")
             return userbot.five
         else:
-            print(f"[Security] WARNING: No userbot session strings configured!")
+            print(f"[Security] WARNING: No started assistants found in list: {assistants}")
             return None
             
     except Exception as e:
@@ -109,14 +121,13 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
         
         if userbot:
             try:
-                print(f"[Security] Attempting to get user {user_id} with userbot...")
+                print(f"[Security] Getting user {user_id} with userbot...")
                 user = await userbot.get_users(user_id)
                 bio = user.bio or ""
                 
-                print(f"[Security] ✅ Successfully got bio using userbot for user {user_id}")
+                print(f"[Security] ✅ Got bio using userbot")
                 print(f"[Security] User: {user.first_name} (@{user.username})")
-                print(f"[Security] Bio raw: '{bio}'")
-                print(f"[Security] Bio length: {len(bio)}")
+                print(f"[Security] Bio: '{bio}'")
                 
             except Exception as e:
                 print(f"[Security] ❌ Userbot failed: {e}")
@@ -129,7 +140,7 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
                     print(f"[Security] ❌ Bot client also failed: {e2}")
                     return False, ""
         else:
-            # No userbot, use bot client (won't work for bot accounts)
+            # No userbot, use bot client
             print(f"[Security] No userbot available, using bot client")
             try:
                 user = await client.get_users(user_id)
@@ -140,20 +151,18 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
         
         contains_link = has_link(bio)
         
-        # Debug logging
         if bio:
-            print(f"[Security] Bio content: '{bio}'")
             print(f"[Security] Link detected: {contains_link}")
             if contains_link:
                 links = extract_links(bio)
                 print(f"[Security] Links found: {links}")
         else:
-            print(f"[Security] User {user_id} has no bio (empty)")
+            print(f"[Security] User {user_id} has no bio")
         
         return contains_link, bio
         
     except Exception as e:
-        print(f"[Security] CRITICAL Error checking bio for user {user_id}: {e}")
+        print(f"[Security] Error checking bio: {e}")
         import traceback
         traceback.print_exc()
         return False, ""
@@ -162,52 +171,43 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
 async def check_bio_detailed(client: Client, user_id: int) -> dict:
     """Check user bio with detailed information using userbot"""
     print(f"\n{'='*60}")
-    print(f"[Security DEBUG] Starting detailed bio check for user {user_id}")
+    print(f"[Security DEBUG] Detailed bio check for user {user_id}")
     
     try:
         userbot = await get_userbot_client()
-        print(f"[Security DEBUG] Userbot client: {userbot}")
-        print(f"[Security DEBUG] Userbot type: {type(userbot)}")
+        print(f"[Security DEBUG] Userbot: {userbot}")
         
         user = None
         bio = ""
         
         if userbot:
             try:
-                print(f"[Security DEBUG] Attempting userbot.get_users({user_id})...")
+                print(f"[Security DEBUG] Calling userbot.get_users({user_id})...")
                 user = await userbot.get_users(user_id)
                 
-                print(f"[Security DEBUG] ✅ User retrieved successfully")
-                print(f"[Security DEBUG] User ID: {user.id}")
-                print(f"[Security DEBUG] First name: {user.first_name}")
+                print(f"[Security DEBUG] ✅ Success!")
+                print(f"[Security DEBUG] Name: {user.first_name}")
                 print(f"[Security DEBUG] Username: @{user.username}")
                 print(f"[Security DEBUG] Is bot: {user.is_bot}")
-                print(f"[Security DEBUG] Bio (raw): '{user.bio}'")
-                print(f"[Security DEBUG] Bio type: {type(user.bio)}")
-                print(f"[Security DEBUG] Bio is None: {user.bio is None}")
+                print(f"[Security DEBUG] Bio: '{user.bio}'")
                 
                 bio = user.bio or ""
-                print(f"[Security DEBUG] Bio after processing: '{bio}'")
-                print(f"[Security DEBUG] Bio length: {len(bio)}")
                 
             except Exception as e:
-                print(f"[Security DEBUG] ❌ Userbot failed: {e}")
+                print(f"[Security DEBUG] ❌ Userbot error: {e}")
                 import traceback
                 traceback.print_exc()
                 
-                print(f"[Security DEBUG] Trying bot client...")
                 user = await client.get_users(user_id)
                 bio = user.bio or ""
                 print(f"[Security DEBUG] Bot client bio: '{bio}'")
         else:
-            print(f"[Security DEBUG] ❌ No userbot available!")
+            print(f"[Security DEBUG] No userbot")
             user = await client.get_users(user_id)
             bio = user.bio or ""
-            print(f"[Security DEBUG] Bot client bio: '{bio}'")
         
         links_found = extract_links(bio)
-        print(f"[Security DEBUG] Links extracted: {links_found}")
-        print(f"[Security DEBUG] Has link: {len(links_found) > 0}")
+        print(f"[Security DEBUG] Links: {links_found}")
         print(f"{'='*60}\n")
         
         return {
@@ -221,7 +221,7 @@ async def check_bio_detailed(client: Client, user_id: int) -> dict:
         }
         
     except Exception as e:
-        print(f"[Security DEBUG] ❌ CRITICAL ERROR: {e}")
+        print(f"[Security DEBUG] ❌ Error: {e}")
         import traceback
         traceback.print_exc()
         print(f"{'='*60}\n")
