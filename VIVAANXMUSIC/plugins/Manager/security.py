@@ -150,11 +150,35 @@ async def security_callback(client, callback: CallbackQuery):
         limit = int(callback.data.split("_")[2])
         _config_cache[chat_id]["warning_limit"] = limit
         await callback.answer(f"✅ sᴇᴛ ᴛᴏ {limit} ᴡᴀʀɴɪɴɢs")
+        
+        # Update display
+        try:
+            await callback.message.edit_text(
+                f"🛡️ **ɢʀᴏᴜᴘ sᴇᴄᴜʀɪᴛʏ sᴇᴛᴛɪɴɢs**\n\n"
+                f"**ᴡᴀʀɴɪɴɢ ʟɪᴍɪᴛ:** `{_config_cache[chat_id]['warning_limit']}`\n"
+                f"**ᴀᴄᴛɪᴏɴ:** `{_config_cache[chat_id]['action'].upper()}`\n\n"
+                f"**ᴄᴏɴғɪɢᴜʀᴇ ᴏʀ sᴀᴠᴇ:**",
+                reply_markup=callback.message.reply_markup
+            )
+        except RPCError:
+            pass  # Message not modified
     
     elif action == "action":
         act = callback.data.split("_")[2]
         _config_cache[chat_id]["action"] = act
         await callback.answer(f"✅ ᴀᴄᴛɪᴏɴ: {act.upper()}")
+        
+        # Update display
+        try:
+            await callback.message.edit_text(
+                f"🛡️ **ɢʀᴏᴜᴘ sᴇᴄᴜʀɪᴛʏ sᴇᴛᴛɪɴɢs**\n\n"
+                f"**ᴡᴀʀɴɪɴɢ ʟɪᴍɪᴛ:** `{_config_cache[chat_id]['warning_limit']}`\n"
+                f"**ᴀᴄᴛɪᴏɴ:** `{_config_cache[chat_id]['action'].upper()}`\n\n"
+                f"**ᴄᴏɴғɪɢᴜʀᴇ ᴏʀ sᴀᴠᴇ:**",
+                reply_markup=callback.message.reply_markup
+            )
+        except RPCError:
+            pass  # Message not modified
     
     elif action == "save":
         # Save to database
@@ -179,15 +203,6 @@ async def security_callback(client, callback: CallbackQuery):
             del _config_cache[chat_id]
         await callback.message.delete()
         return await callback.answer("❌ ᴄᴀɴᴄᴇʟʟᴇᴅ")
-    
-    # Update display
-    await callback.message.edit_text(
-        f"🛡️ **ɢʀᴏᴜᴘ sᴇᴄᴜʀɪᴛʏ sᴇᴛᴛɪɴɢs**\n\n"
-        f"**ᴡᴀʀɴɪɴɢ ʟɪᴍɪᴛ:** `{_config_cache[chat_id]['warning_limit']}`\n"
-        f"**ᴀᴄᴛɪᴏɴ:** `{_config_cache[chat_id]['action'].upper()}`\n\n"
-        f"**ᴄᴏɴғɪɢᴜʀᴇ ᴏʀ sᴀᴠᴇ:**",
-        reply_markup=callback.message.reply_markup
-    )
 
 
 # ────────────────────────────────────────────────────────────
@@ -442,6 +457,7 @@ async def auto_bio_check(client, message: Message):
                 action_emoji = "🚫"
                 action_text = "ʙᴀɴɴᴇᴅ"
             else:
+                # Mute permanently
                 await message.chat.restrict_member(
                     user_id,
                     ChatPermissions(),
@@ -450,12 +466,13 @@ async def auto_bio_check(client, message: Message):
                 action_emoji = "🔇"
                 action_text = "ᴍᴜᴛᴇᴅ"
             
-            # Delete offending message
+            # Try to delete offending message
             try:
                 await message.delete()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[Security] Could not delete message: {e}")
             
+            # Send notification
             await message.reply_text(
                 f"{action_emoji} **{action_text}**\n\n"
                 f"**ᴜsᴇʀ:** {message.from_user.mention}\n"
@@ -477,11 +494,14 @@ async def auto_bio_check(client, message: Message):
     
     else:
         # Issue warning
-        await message.reply_text(
-            f"⚠️ **ᴡᴀʀɴɪɴɢ {warn_count}/{limit}**\n\n"
-            f"**ᴜsᴇʀ:** {message.from_user.mention}\n"
-            f"**ʀᴇᴀsᴏɴ:** ʟɪɴᴋ ᴅᴇᴛᴇᴄᴛᴇᴅ ɪɴ ʙɪᴏ\n\n"
-            f"ʀᴇᴍᴏᴠᴇ ʟɪɴᴋs ғʀᴏᴍ ʏᴏᴜʀ ʙɪᴏ ᴏʀ ғᴀᴄᴇ {action}.\n"
-            f"_ʙɪᴏ ᴘʀᴇᴠɪᴇᴡ: {clean_bio_preview(bio, 80)}_",
-            disable_web_page_preview=True
-        )
+        try:
+            await message.reply_text(
+                f"⚠️ **ᴡᴀʀɴɪɴɢ {warn_count}/{limit}**\n\n"
+                f"**ᴜsᴇʀ:** {message.from_user.mention}\n"
+                f"**ʀᴇᴀsᴏɴ:** ʟɪɴᴋ ᴅᴇᴛᴇᴄᴛᴇᴅ ɪɴ ʙɪᴏ\n\n"
+                f"ʀᴇᴍᴏᴠᴇ ʟɪɴᴋs ғʀᴏᴍ ʏᴏᴜʀ ʙɪᴏ ᴏʀ ғᴀᴄᴇ {action}.\n"
+                f"_ʙɪᴏ ᴘʀᴇᴠɪᴇᴡ: {clean_bio_preview(bio, 80)}_",
+                disable_web_page_preview=True
+            )
+        except Exception as e:
+            print(f"[Security] Warning message error: {e}")
