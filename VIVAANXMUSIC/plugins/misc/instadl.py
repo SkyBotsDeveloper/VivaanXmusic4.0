@@ -1,44 +1,162 @@
+"""
+Instagram/Reels Downloader
+Download Instagram videos and photos using Social Media Downloader API
+Part of VivaanXMusic Bot
+"""
+
 import httpx
 from pyrogram import Client, filters
 from pyrogram.types import Message
+from pyrogram.errors import MessageNotModified
 from VIVAANXMUSIC import app
 
-API_URL = "https://www.alphaapis.org/Instagram/dl/v1"
+# API Configuration
+API_BASE_URL = "https://socialdown.itz-ashlynn.workers.dev"
+API_INSTA = f"{API_BASE_URL}/insta"
 
-@app.on_message(filters.command(["ig", "insta"]))
+# Headers for API
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json"
+}
+
+
+@app.on_message(filters.command(["ig", "insta", "instagram", "reels"]))
 async def insta_download(client: Client, message: Message):
+    """Download Instagram videos and photos"""
+    
+    # Check if URL provided
     if len(message.command) < 2:
-        return await message.reply_text("❌ Usage: /insta [Instagram URL]")
+        return await message.reply_text(
+            "❌ **Usage Error**\n\n"
+            "`/insta [Instagram URL]`\n\n"
+            "**Examples:**\n"
+            "• `/insta https://www.instagram.com/p/ABC123/`\n"
+            "• `/insta https://www.instagram.com/reel/ABC123/`\n"
+            "• `/insta https://instagram.com/p/ABC123/`"
+        )
 
-    processing_message = await message.reply_text("🔄 Processing...")
+    # Send processing message
+    processing_msg = await message.reply_text("🔄 **Processing your Instagram link...**")
 
     try:
         instagram_url = message.command[1]
+        
+        # Validate URL
+        if "instagram.com" not in instagram_url:
+            return await processing_msg.edit("❌ **Invalid URL!** Please provide a valid Instagram link.")
 
-        async with httpx.AsyncClient(timeout=15.0) as http:
-            response = await http.get(API_URL, params={"url": instagram_url})
+        # Call API with GET method
+        async with httpx.AsyncClient(timeout=20.0, headers=HEADERS) as client_http:
+            response = await client_http.get(API_INSTA, params={"url": instagram_url})
             response.raise_for_status()
             data = response.json()
 
-        results = data.get("result", [])
+        # Check if successful
+        if not data.get("success"):
+            error_msg = data.get("error", "Unknown error occurred")
+            return await processing_msg.edit(f"❌ **API Error:** {error_msg}")
 
-        if not results:
-            return await processing_message.edit("⚠️ No media found. Please check the link.")
+        # Get URLs from response
+        urls = data.get("urls", [])
+        
+        if not urls:
+            return await processing_msg.edit("⚠️ **No media found!** The link may be invalid or the video may be unavailable.")
 
-        for item in results:
-            download_link = item.get("downloadLink")
+        # Get metadata
+        metadata = data.get("metadata", {})
+        original_url = metadata.get("original_url", instagram_url)
 
-            if not download_link:
+        # Send media files
+        await processing_msg.edit("📤 **Uploading media...**")
+        
+        for idx, media_url in enumerate(urls):
+            try:
+                # Determine media type from URL
+                if media_url.endswith(".mp4"):
+                    # Send as video
+                    await message.reply_video(
+                        video=media_url,
+                        caption=f"📱 **Instagram Video** ({idx + 1}/{len(urls)})\n\n[View Original]({original_url})",
+                        parse_mode="markdown"
+                    )
+                elif any(media_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
+                    # Send as photo
+                    await message.reply_photo(
+                        photo=media_url,
+                        caption=f"📱 **Instagram Photo** ({idx + 1}/{len(urls)})\n\n[View Original]({original_url})",
+                        parse_mode="markdown"
+                    )
+                else:
+                    # Unknown format - send as document
+                    await message.reply_document(
+                        document=media_url,
+                        caption=f"📁 **Instagram Media** ({idx + 1}/{len(urls)})\n\n[View Original]({original_url})",
+                        parse_mode="markdown"
+                    )
+                    
+            except Exception as media_error:
+                await message.reply_text(
+                    f"❌ **Error uploading media {idx + 1}/{len(urls)}:** {str(media_error)[:100]}"
+                )
                 continue
 
-            if ".mp4" in download_link:
-                await message.reply_video(download_link)
-            elif any(ext in download_link for ext in (".jpg", ".jpeg", ".png", ".webp")):
-                await message.reply_photo(download_link)
-            else:
-                await message.reply_text(f"❌ Unsupported media type: {download_link}")
+        # Delete processing message
+        await processing_msg.delete()
 
+    except httpx.TimeoutException:
+        await processing_msg.edit("❌ **Timeout Error!** The API took too long to respond. Try again later.")
+    
+    except httpx.HTTPStatusError as e:
+        await processing_msg.edit(f"❌ **HTTP Error {e.response.status_code}!** The API returned an error.")
+    
+    except ValueError as e:
+        await processing_msg.edit(f"❌ **JSON Parse Error!** Invalid response from API.")
+    
+    except MessageNotModified:
+        # Message was already deleted
+        pass
+    
     except Exception as e:
-        await processing_message.edit(f"❌ Error: {e}")
-    finally:
-        await processing_message.delete()
+        error_msg = str(e)[:200]
+        try:
+            await processing_msg.edit(f"❌ **Unexpected Error:** {error_msg}")
+        except:
+            await message.reply_text(f"❌ **Error:** {error_msg}")
+
+
+@app.on_message(filters.command(["ighelp", "instahelp"]))
+async def insta_help(client: Client, message: Message):
+    """Show Instagram downloader help"""
+    help_text = """
+🎬 **Instagram Downloader Help**
+
+**Commands:**
+• `/insta [URL]` - Download Instagram video/photo
+• `/ig [URL]` - Short alias for /insta
+• `/instagram [URL]` - Alternative command
+• `/reels [URL]` - Download Instagram Reels
+
+**Supported Links:**
+✅ Posts: `https://www.instagram.com/p/ABC123/`
+✅ Reels: `https://www.instagram.com/reel/ABC123/`
+✅ Stories: `https://www.instagram.com/stories/username/ABC123/`
+✅ Short URLs: `https://instagram.com/p/ABC123/`
+
+**Example Usage:**
+`/insta https://www.instagram.com/p/ABC123/`
+
+**Features:**
+• Automatic video/photo detection
+• Support for multi-media posts
+• Direct Telegram upload
+• Fast processing
+
+**Note:**
+⚠️ This bot respects Instagram ToS
+⚠️ Only download content you have permission to download
+⚠️ Don't use for commercial purposes without permission
+
+Need help? Contact support.
+"""
+    await message.reply_text(help_text)
