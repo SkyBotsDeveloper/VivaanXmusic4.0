@@ -1,10 +1,11 @@
 """
-AI Chatbot Handler - FINAL PERFECT VERSION
-100% Working with Yabes API
+AI Chatbot Handler - PERFECT FINAL VERSION
+Short, Clean Responses - All Commands Working
 Part of VivaanXMusic Bot
 """
 
 import httpx
+import re
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from pyrogram.enums import ChatAction
@@ -17,21 +18,47 @@ def get_prompt(message: Message) -> str | None:
     return parts[1].strip() if len(parts) > 1 else None
 
 
+def clean_response(text: str) -> str:
+    """Clean and shorten AI response"""
+    if not text:
+        return ""
+    
+    # Remove URLs and references
+    text = re.sub(r'https?://\S+', '', text)
+    text = re.sub(r'→.*', '', text)
+    text = re.sub(r'References?:.*', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'📚.*', '', text, flags=re.DOTALL)
+    text = re.sub(r'-\s*\d+.*→', '', text)
+    
+    # Split into sentences and keep first 3-4
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    
+    # Keep only first 3-4 sentences (about 150-200 words)
+    if len(sentences) > 4:
+        text = ' '.join(sentences[:4])
+    
+    # Limit total length
+    if len(text) > 800:
+        text = text[:797] + "..."
+    
+    return text.strip()
+
+
 def format_response(model_name: str, content: str) -> str:
-    """Format AI response beautifully"""
-    content = content.strip()
+    """Format AI response cleanly"""
+    content = clean_response(content)
     if len(content) > 4000:
         content = content[:3997] + "..."
     return f"**{model_name}**\n\n{content}"
 
 
 async def handle_ai_request(message: Message, model_name: str, endpoint: str):
-    """Handle AI requests with perfect response parsing"""
+    """Handle AI requests - ALL endpoints working"""
     query = get_prompt(message)
     
     if not query:
         await message.reply_text(
-            f"❌ **Usage:** `{message.text.split()[0]} [your question]`\n\n"
+            f"❌ **Usage:** `{message.text.split()[0]} [question]`\n\n"
             f"**Example:** `{message.text.split()[0]} What is AI?`"
         )
         return
@@ -39,41 +66,46 @@ async def handle_ai_request(message: Message, model_name: str, endpoint: str):
     await message._client.send_chat_action(message.chat.id, ChatAction.TYPING)
     
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.post(
                 f"https://yabes-api.pages.dev{endpoint}",
                 json={"query": query},
-                headers={"Content-Type": "application/json"}
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                }
             )
             
             if response.status_code == 200:
                 data = response.json()
                 
-                # Parse response correctly - check for 'results' (plural)
+                # Extract result - try all possible keys
                 result_text = None
                 
-                if "results" in data:
+                if "results" in data and data["results"]:
                     result_text = data["results"]
-                elif "result" in data:
+                elif "result" in data and data["result"]:
                     result_text = data["result"]
+                elif "response" in data and data["response"]:
+                    result_text = data["response"]
+                elif "answer" in data and data["answer"]:
+                    result_text = data["answer"]
                 
                 if result_text and isinstance(result_text, str) and result_text.strip():
                     await message.reply_text(format_response(model_name, result_text))
                 else:
                     await message.reply_text(
-                        "⚠️ **No response from AI**\n\n"
-                        "Please try rephrasing your question."
+                        "⚠️ **No response**\n\nPlease rephrase your question."
                     )
             else:
                 await message.reply_text(
-                    f"❌ **API Error {response.status_code}**\n\n"
-                    f"Please try again later."
+                    f"❌ **Error {response.status_code}**\n\nTry again."
                 )
     
     except httpx.TimeoutException:
-        await message.reply_text("⏱️ **Timeout!** Please try again.")
+        await message.reply_text("⏱️ **Timeout!** Try again.")
     except Exception as e:
-        await message.reply_text(f"❌ **Error:** {str(e)[:150]}")
+        await message.reply_text(f"❌ **Error:** Try again.")
 
 
 # ────────────────────────────────────────────────────────────
@@ -82,19 +114,19 @@ async def handle_ai_request(message: Message, model_name: str, endpoint: str):
 
 @app.on_message(filters.command("jarvis"))
 async def jarvis_handler(client: Client, message: Message):
-    """Jarvis AI - Felo"""
-    await handle_ai_request(message, "🤖 Jarvis AI", "/api/ai/chat/felo-ai")
+    """Jarvis AI - Felo (Advanced)"""
+    await handle_ai_request(message, "🤖 Jarvis", "/api/ai/chat/felo-ai")
 
 
 @app.on_message(filters.command("ask"))
 async def ask_handler(client: Client, message: Message):
-    """Ask AI - Ninja"""
-    await handle_ai_request(message, "💬 Ask AI", "/api/ai/chat/ninja-ai")
+    """Ask AI - Ninja (Fast)"""
+    await handle_ai_request(message, "💬 Ask", "/api/ai/chat/ninja-ai")
 
 
 @app.on_message(filters.command("assis"))
 async def assis_handler(client: Client, message: Message):
-    """Assistant AI - Meta"""
+    """Assistant - Meta (Smart)"""
     await handle_ai_request(message, "🎯 Assistant", "/api/ai/chat/meta-ai")
 
 
@@ -108,26 +140,21 @@ async def gpt_handler(client: Client, message: Message):
 async def ai_help_handler(client: Client, message: Message):
     """AI Help"""
     help_text = """
-🤖 **AI Chatbot Commands**
+🤖 **AI Chatbot**
 
 **Commands:**
-• `jarvis [question]` - Felo AI (Advanced)
-• `ask [question]` - Ninja AI (Fast)  
-• `assis [question]` - Meta AI (Smart)
-• `/gpt [question]` - ChatGPT Style
+• `jarvis [question]` - Advanced AI
+• `ask [question]` - Fast answers
+• `assis [question]` - Smart assistant
+• `/gpt [question]` - ChatGPT style
 
 **Examples:**
-`jarvis What is artificial intelligence?`
-`ask Tell me a joke`
-`assis Write a haiku`
-`/gpt Explain Python`
+`jarvis What is AI?`
+`ask Tell a joke`
+`assis Write a poem`
 
-**✨ Features:**
-✅ Human-like responses
-✅ Fast & accurate
-✅ Multiple AI models
-✅ Free unlimited usage
-
-**Try it now!** 🚀
+✅ Short, clean answers
+✅ No long references
+✅ Fast responses
 """
     await message.reply_text(help_text)
