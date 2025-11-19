@@ -1,10 +1,7 @@
 """
 Security Check Utilities - BioAnalyser Integration
 Bio link detection and user verification for group security
-Uses USERBOT client for bio access
-
-IMPORTANT: Telegram API limitation - Bot accounts' bios CANNOT be read
-even with userbots. This feature works ONLY for human user accounts.
+Uses ALREADY STARTED userbot client for bio access
 """
 
 import re
@@ -18,15 +15,15 @@ from pyrogram.types import User, Message
 
 URL_PATTERN = re.compile(
     r'(?i)(?:'
-        r'@[a-zA-Z0-9_][a-zA-Z0-9_]{3,31}|'  # @username mentions
-        r't\.me/[a-zA-Z0-9_./\-]+|'  # t.me links
-        r'telegram\.me/[a-zA-Z0-9_./\-]+|'  # telegram.me links
-        r'tg\.me/[a-zA-Z0-9_./\-]+|'  # tg.me links
-        r'https?://[^\s]+|'  # http:// or https:// URLs
-        r'www\.[a-zA-Z0-9.\-]+(?:[/?#][^\s]*)?|'  # www.example.com
-        r'(?:bit\.ly|ow\.ly|tinyurl\.com|short\.link|goo\.gl|is\.gd)/[a-zA-Z0-9.\-_]+|'  # URL shorteners
-        r'(?:instagram|tiktok|twitter|facebook|youtube|linkedin|snapchat|discord|twitch|reddit)\.com/[a-zA-Z0-9.\-_~:/?#@!$&\'()*+,;=%]+|'  # Social media
-        r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+(?:com|org|net|io|co|uk|app|dev|shop|xyz|info|biz|online|site|store|club|live|pro|world|life|today|fun|space|website|email|link|click|digital|download|cloud|host)(?:[/?#][^\s]*)?'  # Domain names
+        r'@[a-zA-Z0-9_][a-zA-Z0-9_]{3,31}|'
+        r't\.me/[a-zA-Z0-9_./\-]+|'
+        r'telegram\.me/[a-zA-Z0-9_./\-]+|'
+        r'tg\.me/[a-zA-Z0-9_./\-]+|'
+        r'https?://[^\s]+|'
+        r'www\.[a-zA-Z0-9.\-]+(?:[/?#][^\s]*)?|'
+        r'(?:bit\.ly|ow\.ly|tinyurl\.com|short\.link|goo\.gl|is\.gd)/[a-zA-Z0-9.\-_]+|'
+        r'(?:instagram|tiktok|twitter|facebook|youtube|linkedin|snapchat|discord|twitch|reddit)\.com/[a-zA-Z0-9.\-_~:/?#@!$&\'()*+,;=%]+|'
+        r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+(?:com|org|net|io|co|uk|app|dev|shop|xyz|info|biz|online|site|store|club|live|pro|world|life|today|fun|space|website|email|link|click|digital|download|cloud|host)(?:[/?#][^\s]*)?'
     r')'
 )
 
@@ -51,59 +48,57 @@ def extract_links(text: str) -> list:
 # ==================== USERBOT ACCESS ====================
 
 async def get_userbot_client():
-    """Get the first available STARTED userbot client"""
+    """Get the ALREADY STARTED userbot client from global instance"""
     try:
-        import config
-        from VIVAANXMUSIC.core.userbot import Userbot, assistants
+        # Import the GLOBAL userbot instance that was started in __main__
+        from VIVAANXMUSIC import userbot
+        from VIVAANXMUSIC.core.userbot import assistants
         
-        # Wait for assistants to start if not ready
+        # Wait for assistants to be ready
         if not assistants:
-            print(f"[Security] Waiting for assistants to start...")
-            for _ in range(20):  # Wait up to 10 seconds
+            print(f"[Security] Waiting for assistants...")
+            for _ in range(20):
                 await asyncio.sleep(0.5)
                 if assistants:
-                    print(f"[Security] Assistants now available: {assistants}")
                     break
-            
-            if not assistants:
-                print(f"[Security] WARNING: No assistants started")
-                return None
         
-        # Get userbot instance
-        userbot = Userbot()
+        if not assistants:
+            print(f"[Security] No assistants available")
+            return None
         
-        # Return first available started assistant
-        if 1 in assistants and config.STRING1:
-            print(f"[Security] Using assistant 1")
+        print(f"[Security] Available assistants: {assistants}")
+        
+        # Use the first available assistant from the GLOBAL started instance
+        if 1 in assistants:
+            print(f"[Security] Using global assistant 1")
             return userbot.one
-        elif 2 in assistants and config.STRING2:
-            print(f"[Security] Using assistant 2")
+        elif 2 in assistants:
+            print(f"[Security] Using global assistant 2")
             return userbot.two
-        elif 3 in assistants and config.STRING3:
-            print(f"[Security] Using assistant 3")
+        elif 3 in assistants:
+            print(f"[Security] Using global assistant 3")
             return userbot.three
-        elif 4 in assistants and config.STRING4:
-            print(f"[Security] Using assistant 4")
+        elif 4 in assistants:
+            print(f"[Security] Using global assistant 4")
             return userbot.four
-        elif 5 in assistants and config.STRING5:
-            print(f"[Security] Using assistant 5")
+        elif 5 in assistants:
+            print(f"[Security] Using global assistant 5")
             return userbot.five
         
-        print(f"[Security] No started assistants available")
+        print(f"[Security] No assistants in list")
         return None
             
     except Exception as e:
         print(f"[Security] Error getting userbot: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
 # ==================== BIO CHECKING ====================
 
 async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
-    """
-    Check if user's bio contains links
-    NOTE: Cannot read bot account bios due to Telegram API limitation
-    """
+    """Check if user's bio contains links"""
     try:
         userbot = await get_userbot_client()
         
@@ -113,25 +108,23 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
                 bio = user.bio or ""
                 
                 if user.is_bot:
-                    print(f"[Security] ⚠️ User {user_id} is a bot - bio cannot be read (Telegram limitation)")
+                    print(f"[Security] ⚠️ Bot account {user.first_name} - bio cannot be read")
                     return False, ""
                 
                 contains_link = has_link(bio)
                 
                 if bio:
-                    print(f"[Security] User {user.first_name}: bio length {len(bio)}, has_link: {contains_link}")
+                    print(f"[Security] ✅ {user.first_name}: '{bio[:50]}...' | Links: {contains_link}")
                     if contains_link:
-                        print(f"[Security] Links: {extract_links(bio)}")
+                        print(f"[Security] Found: {extract_links(bio)}")
                 
                 return contains_link, bio
                 
             except Exception as e:
                 print(f"[Security] Userbot error: {e}")
-                # Fallback to bot client
                 user = await client.get_users(user_id)
                 return False, user.bio or ""
         else:
-            # No userbot available
             user = await client.get_users(user_id)
             return False, user.bio or ""
         
@@ -141,7 +134,7 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
 
 
 async def check_bio_detailed(client: Client, user_id: int) -> dict:
-    """Detailed bio check with full information"""
+    """Detailed bio check"""
     try:
         userbot = await get_userbot_client()
         
@@ -150,11 +143,10 @@ async def check_bio_detailed(client: Client, user_id: int) -> dict:
                 user = await userbot.get_users(user_id)
                 bio = user.bio or ""
                 
-                # Check if bot account
                 if user.is_bot:
                     return {
                         "has_link": False,
-                        "bio": "⚠️ Bot account - bio cannot be read (Telegram API limitation)",
+                        "bio": "⚠️ Bot account - bio cannot be read",
                         "links": [],
                         "link_count": 0,
                         "username": user.username,
@@ -206,7 +198,7 @@ async def check_bio_detailed(client: Client, user_id: int) -> dict:
         print(f"[Security] Error: {e}")
         return {
             "has_link": False,
-            "bio": "Error reading bio",
+            "bio": "Error",
             "links": [],
             "link_count": 0,
             "username": None,
@@ -233,7 +225,7 @@ async def get_target_user(message: Message) -> Optional[User]:
             return await message._client.get_users(int(user_input))
         return await message._client.get_users(user_input)
     except Exception as e:
-        print(f"[Security] Error getting user: {e}")
+        print(f"[Security] Error: {e}")
         return None
 
 
@@ -258,7 +250,7 @@ async def get_user_info(client: Client, user_id: int) -> Optional[dict]:
 # ==================== TEXT VALIDATION ====================
 
 def clean_bio_preview(bio: str, max_length: int = 100) -> str:
-    """Clean and truncate bio for preview"""
+    """Clean and truncate bio"""
     if not bio or bio == "No bio":
         return "No bio"
     bio = " ".join(bio.split())
