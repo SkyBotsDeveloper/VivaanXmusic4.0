@@ -1,6 +1,7 @@
 """
 Security Check Utilities
 Bio link detection and user verification for group security
+Uses USERBOT client for bio access (bots can't read bios)
 Part of VivaanXMusic Group Management System
 """
 
@@ -13,7 +14,6 @@ from pyrogram.types import User, Message
 # ==================== COMPREHENSIVE LINK DETECTION PATTERN ====================
 
 # Enhanced URL pattern from BioAnalyser
-# Detects: @mentions, telegram links, URLs, social media, domains, shorteners
 URL_PATTERN = re.compile(
     r'(?i)(?:'
         r'@[a-zA-Z0-9_][a-zA-Z0-9_]{3,31}|'  # @username mentions (4-32 chars)
@@ -32,84 +32,94 @@ URL_PATTERN = re.compile(
 # ==================== LINK DETECTION FUNCTIONS ====================
 
 def has_link(text: str) -> bool:
-    """
-    Check if text contains any links or URLs using comprehensive pattern
-    
-    Args:
-        text (str): Text to check
-        
-    Returns:
-        bool: True if link found, False otherwise
-    """
+    """Check if text contains any links or URLs"""
     if not text:
         return False
-    
-    match = URL_PATTERN.search(text)
-    return match is not None
+    return URL_PATTERN.search(text) is not None
 
 
 def extract_links(text: str) -> list:
-    """
-    Extract all links from text
-    
-    Args:
-        text (str): Text to extract links from
-        
-    Returns:
-        list: List of found links
-    """
+    """Extract all links from text"""
     if not text:
         return []
-    
     links = URL_PATTERN.findall(text)
-    return list(set(links))  # Remove duplicates
+    return list(set(links))
 
 
-# ==================== BIO CHECKING ====================
+# ==================== BIO CHECKING (USING USERBOT) ====================
 
 async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
     """
     Check if user's bio contains links
+    Uses USERBOT client to access full bio data
     
     Args:
-        client (Client): Pyrogram client
+        client (Client): Pyrogram client (should be userbot)
         user_id (int): User ID to check
         
     Returns:
         Tuple[bool, str]: (has_link, bio_text)
     """
     try:
-        user: User = await client.get_users(user_id)
+        # Import userbot client
+        from VIVAANXMUSIC.core.userbot import Userbot
+        
+        # Use userbot to get full user data including bio
+        # Userbot clients can access bios that bot clients can't
+        userbot_clients = Userbot()
+        
+        # Try with first available userbot
+        user = None
+        for userbot in userbot_clients:
+            try:
+                user = await userbot.get_users(user_id)
+                break
+            except:
+                continue
+        
+        if not user:
+            # Fallback to bot client (won't work for bot accounts)
+            user = await client.get_users(user_id)
+        
         bio = user.bio or ""
         contains_link = has_link(bio)
         
         # Debug logging
         if bio:
-            print(f"[Security Debug] User {user_id} bio: '{bio}'")
-            print(f"[Security Debug] Link detected: {contains_link}")
+            print(f"[Security] User {user_id} ({user.first_name}) bio: '{bio}'")
+            print(f"[Security] Link detected: {contains_link}")
             if contains_link:
                 links = extract_links(bio)
-                print(f"[Security Debug] Links found: {links}")
+                print(f"[Security] Links found: {links}")
+        else:
+            print(f"[Security] User {user_id} has no bio")
         
         return contains_link, bio
+        
     except Exception as e:
         print(f"[Security] Error checking bio for user {user_id}: {e}")
         return False, ""
 
 
 async def check_bio_detailed(client: Client, user_id: int) -> dict:
-    """
-    Check user bio with detailed information
-    
-    Args:
-        client (Client): Pyrogram client
-        user_id (int): User ID to check
-        
-    Returns:
-        dict: Detailed bio check results
-    """
+    """Check user bio with detailed information using userbot"""
     try:
-        user: User = await client.get_users(user_id)
+        # Import userbot client
+        from VIVAANXMUSIC.core.userbot import Userbot
+        
+        userbot_clients = Userbot()
+        
+        user = None
+        for userbot in userbot_clients:
+            try:
+                user = await userbot.get_users(user_id)
+                break
+            except:
+                continue
+        
+        if not user:
+            user = await client.get_users(user_id)
+        
         bio = user.bio or ""
         links_found = extract_links(bio)
         
@@ -123,7 +133,7 @@ async def check_bio_detailed(client: Client, user_id: int) -> dict:
             "first_name": user.first_name
         }
     except Exception as e:
-        print(f"[Security] Error in detailed bio check for user {user_id}: {e}")
+        print(f"[Security] Error in detailed bio check: {e}")
         return {
             "has_link": False,
             "bio": "",
@@ -138,50 +148,26 @@ async def check_bio_detailed(client: Client, user_id: int) -> dict:
 # ==================== USER EXTRACTION ====================
 
 async def get_target_user(message: Message) -> Optional[User]:
-    """
-    Extract target user from message (reply/mention/ID)
-    Compatible with VivaanXMusic command patterns
-    
-    Args:
-        message (Message): Message object
-        
-    Returns:
-        Optional[User]: User object or None
-    """
-    # Check if replying to a message
+    """Extract target user from message (reply/mention/ID)"""
     if message.reply_to_message:
         return message.reply_to_message.from_user
     
-    # Check if user ID or username provided in command
     if len(message.command) < 2:
         return None
     
     user_input = message.command[1]
     
     try:
-        # Try as user ID (numeric)
         if user_input.isdigit():
             return await message._client.get_users(int(user_input))
-        
-        # Try as username (with or without @)
         return await message._client.get_users(user_input)
-        
     except Exception as e:
         print(f"[Security] Error getting target user: {e}")
         return None
 
 
 async def get_user_info(client: Client, user_id: int) -> Optional[dict]:
-    """
-    Get basic user information
-    
-    Args:
-        client (Client): Pyrogram client
-        user_id (int): User ID
-        
-    Returns:
-        Optional[dict]: User info or None
-    """
+    """Get basic user information"""
     try:
         user: User = await client.get_users(user_id)
         return {
@@ -201,40 +187,17 @@ async def get_user_info(client: Client, user_id: int) -> Optional[dict]:
 # ==================== TEXT VALIDATION ====================
 
 def clean_bio_preview(bio: str, max_length: int = 100) -> str:
-    """
-    Clean and truncate bio for preview
-    
-    Args:
-        bio (str): Bio text
-        max_length (int): Maximum length
-        
-    Returns:
-        str: Cleaned preview text
-    """
+    """Clean and truncate bio for preview"""
     if not bio:
         return "No bio"
-    
-    # Remove excessive whitespace
     bio = " ".join(bio.split())
-    
-    # Truncate if too long
     if len(bio) > max_length:
         return bio[:max_length] + "..."
-    
     return bio
 
 
 def format_links_list(links: list, max_display: int = 5) -> str:
-    """
-    Format list of links for display
-    
-    Args:
-        links (list): List of links
-        max_display (int): Maximum links to display
-        
-    Returns:
-        str: Formatted links string
-    """
+    """Format list of links for display"""
     if not links:
         return "No links found"
     
@@ -245,33 +208,3 @@ def format_links_list(links: list, max_display: int = 5) -> str:
         result += f"\n└ ... and {len(links) - max_display} more"
     
     return result
-
-
-# ==================== TESTING FUNCTION ====================
-
-def test_pattern():
-    """Test function to verify pattern works"""
-    test_cases = [
-        ("Assistant of @xm_musician_bot manage by @itsvivaan", True),
-        ("Check my website.com for more", True),
-        ("Visit t.me/channel", True),
-        ("Instagram: instagram.com/myprofile", True),
-        ("Normal text without links", False),
-        ("Contact me @username", True),
-        ("https://example.com", True),
-        ("www.google.com", True),
-        ("bit.ly/shortlink", True),
-    ]
-    
-    print("\n[Security] Testing URL Pattern:")
-    for text, expected in test_cases:
-        result = has_link(text)
-        status = "✅" if result == expected else "❌"
-        links = extract_links(text) if result else []
-        print(f"{status} '{text}' -> {result} {links}")
-    print()
-
-
-# Run test on import (for debugging)
-if __name__ == "__main__":
-    test_pattern()
