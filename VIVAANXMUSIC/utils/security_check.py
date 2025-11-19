@@ -15,15 +15,15 @@ from pyrogram.types import User, Message
 
 URL_PATTERN = re.compile(
     r'(?i)(?:'
-        r'@[a-zA-Z0-9_][a-zA-Z0-9_]{3,31}|'
-        r't\.me/[a-zA-Z0-9_./\-]+|'
-        r'telegram\.me/[a-zA-Z0-9_./\-]+|'
-        r'tg\.me/[a-zA-Z0-9_./\-]+|'
-        r'https?://[^\s]+|'
-        r'www\.[a-zA-Z0-9.\-]+(?:[/?#][^\s]*)?|'
-        r'(?:bit\.ly|ow\.ly|tinyurl\.com|short\.link|goo\.gl|is\.gd)/[a-zA-Z0-9.\-_]+|'
-        r'(?:instagram|tiktok|twitter|facebook|youtube|linkedin|snapchat|discord|twitch|reddit)\.com/[a-zA-Z0-9.\-_~:/?#@!$&\'()*+,;=%]+|'
-        r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+(?:com|org|net|io|co|uk|app|dev|shop|xyz|info|biz|online|site|store|club|live|pro|world|life|today|fun|space|website|email|link|click|digital|download|cloud|host)(?:[/?#][^\s]*)?'
+        r'@[a-zA-Z0-9_][a-zA-Z0-9_]{3,31}|'  # @username mentions (4-32 chars)
+        r't\.me/[a-zA-Z0-9_./\-]+|'  # t.me links
+        r'telegram\.me/[a-zA-Z0-9_./\-]+|'  # telegram.me links
+        r'tg\.me/[a-zA-Z0-9_./\-]+|'  # tg.me links
+        r'https?://[^\s]+|'  # http:// or https:// URLs
+        r'www\.[a-zA-Z0-9.\-]+(?:[/?#][^\s]*)?|'  # www.example.com
+        r'(?:bit\.ly|ow\.ly|tinyurl\.com|short\.link|goo\.gl|is\.gd)/[a-zA-Z0-9.\-_]+|'  # URL shorteners
+        r'(?:instagram|tiktok|twitter|facebook|youtube|linkedin|snapchat|discord|twitch|reddit)\.com/[a-zA-Z0-9.\-_~:/?#@!$&\'()*+,;=%]+|'  # Social media
+        r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+(?:com|org|net|io|co|uk|app|dev|shop|xyz|info|biz|online|site|store|club|live|pro|world|life|today|fun|space|website|email|link|click|digital|download|cloud|host)(?:[/?#][^\s]*)?'  # Domain names
     r')'
 )
 
@@ -59,14 +59,14 @@ def get_userbot_instance():
 
 
 async def get_userbot_client():
-    """Get the first available userbot client"""
+    """Get the first available and STARTED userbot client"""
     try:
         import config
         
         # Get the userbot instance
         userbot = get_userbot_instance()
         
-        # Try to use the first available client
+        # Try to use the first available client that has a session string
         if config.STRING1:
             print(f"[Security] Using userbot client 'one'")
             return userbot.one
@@ -105,36 +105,55 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
         userbot = await get_userbot_client()
         
         user = None
+        bio = ""
         
         if userbot:
             try:
+                print(f"[Security] Attempting to get user {user_id} with userbot...")
                 user = await userbot.get_users(user_id)
+                bio = user.bio or ""
+                
                 print(f"[Security] ✅ Successfully got bio using userbot for user {user_id}")
+                print(f"[Security] User: {user.first_name} (@{user.username})")
+                print(f"[Security] Bio raw: '{bio}'")
+                print(f"[Security] Bio length: {len(bio)}")
+                
             except Exception as e:
-                print(f"[Security] Userbot failed: {e}, trying bot client")
-                user = await client.get_users(user_id)
+                print(f"[Security] ❌ Userbot failed: {e}")
+                print(f"[Security] Falling back to bot client...")
+                try:
+                    user = await client.get_users(user_id)
+                    bio = user.bio or ""
+                    print(f"[Security] Bot client bio: '{bio}'")
+                except Exception as e2:
+                    print(f"[Security] ❌ Bot client also failed: {e2}")
+                    return False, ""
         else:
             # No userbot, use bot client (won't work for bot accounts)
             print(f"[Security] No userbot available, using bot client")
-            user = await client.get_users(user_id)
+            try:
+                user = await client.get_users(user_id)
+                bio = user.bio or ""
+            except Exception as e:
+                print(f"[Security] Bot client failed: {e}")
+                return False, ""
         
-        bio = user.bio or ""
         contains_link = has_link(bio)
         
         # Debug logging
         if bio:
-            print(f"[Security] User {user_id} ({user.first_name}) bio: '{bio}'")
+            print(f"[Security] Bio content: '{bio}'")
             print(f"[Security] Link detected: {contains_link}")
             if contains_link:
                 links = extract_links(bio)
                 print(f"[Security] Links found: {links}")
         else:
-            print(f"[Security] User {user_id} ({user.first_name}) has no bio")
+            print(f"[Security] User {user_id} has no bio (empty)")
         
         return contains_link, bio
         
     except Exception as e:
-        print(f"[Security] Error checking bio for user {user_id}: {e}")
+        print(f"[Security] CRITICAL Error checking bio for user {user_id}: {e}")
         import traceback
         traceback.print_exc()
         return False, ""
@@ -142,23 +161,54 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
 
 async def check_bio_detailed(client: Client, user_id: int) -> dict:
     """Check user bio with detailed information using userbot"""
+    print(f"\n{'='*60}")
+    print(f"[Security DEBUG] Starting detailed bio check for user {user_id}")
+    
     try:
         userbot = await get_userbot_client()
+        print(f"[Security DEBUG] Userbot client: {userbot}")
+        print(f"[Security DEBUG] Userbot type: {type(userbot)}")
         
         user = None
+        bio = ""
         
         if userbot:
             try:
+                print(f"[Security DEBUG] Attempting userbot.get_users({user_id})...")
                 user = await userbot.get_users(user_id)
-                print(f"[Security] ✅ Detailed scan using userbot for user {user_id}")
+                
+                print(f"[Security DEBUG] ✅ User retrieved successfully")
+                print(f"[Security DEBUG] User ID: {user.id}")
+                print(f"[Security DEBUG] First name: {user.first_name}")
+                print(f"[Security DEBUG] Username: @{user.username}")
+                print(f"[Security DEBUG] Is bot: {user.is_bot}")
+                print(f"[Security DEBUG] Bio (raw): '{user.bio}'")
+                print(f"[Security DEBUG] Bio type: {type(user.bio)}")
+                print(f"[Security DEBUG] Bio is None: {user.bio is None}")
+                
+                bio = user.bio or ""
+                print(f"[Security DEBUG] Bio after processing: '{bio}'")
+                print(f"[Security DEBUG] Bio length: {len(bio)}")
+                
             except Exception as e:
-                print(f"[Security] Userbot failed in detailed check: {e}")
+                print(f"[Security DEBUG] ❌ Userbot failed: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                print(f"[Security DEBUG] Trying bot client...")
                 user = await client.get_users(user_id)
+                bio = user.bio or ""
+                print(f"[Security DEBUG] Bot client bio: '{bio}'")
         else:
+            print(f"[Security DEBUG] ❌ No userbot available!")
             user = await client.get_users(user_id)
+            bio = user.bio or ""
+            print(f"[Security DEBUG] Bot client bio: '{bio}'")
         
-        bio = user.bio or ""
         links_found = extract_links(bio)
+        print(f"[Security DEBUG] Links extracted: {links_found}")
+        print(f"[Security DEBUG] Has link: {len(links_found) > 0}")
+        print(f"{'='*60}\n")
         
         return {
             "has_link": len(links_found) > 0,
@@ -169,10 +219,13 @@ async def check_bio_detailed(client: Client, user_id: int) -> dict:
             "user_id": user.id,
             "first_name": user.first_name
         }
+        
     except Exception as e:
-        print(f"[Security] Error in detailed bio check: {e}")
+        print(f"[Security DEBUG] ❌ CRITICAL ERROR: {e}")
         import traceback
         traceback.print_exc()
+        print(f"{'='*60}\n")
+        
         return {
             "has_link": False,
             "bio": "",
