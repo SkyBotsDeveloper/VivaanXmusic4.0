@@ -17,16 +17,28 @@ All commands accept reply, @username, or user-ID with graceful handling.
 
 import asyncio
 from typing import Optional, Dict
+from datetime import datetime, timedelta
 
 from pyrogram import filters, enums
 from pyrogram.errors import ChatAdminRequired, UserAdminInvalid, RPCError
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from datetime import datetime, timedelta
+from pyrogram.types import (
+    Message,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    CallbackQuery,
+    ChatPermissions
+)
 
 from VIVAANXMUSIC import app
 from VIVAANXMUSIC.misc import SUDOERS
 from VIVAANXMUSIC.utils.decorator import admin_required
-from VIVAANXMUSIC.utils.security_check import check_bio, get_target_user, clean_bio_preview, format_links_list, check_bio_detailed
+from VIVAANXMUSIC.utils.security_check import (
+    check_bio,
+    get_target_user,
+    clean_bio_preview,
+    format_links_list,
+    check_bio_detailed
+)
 from VIVAANXMUSIC.utils.permissions import mention
 from VIVAANXMUSIC.mongo.group_security_db import gsdb
 
