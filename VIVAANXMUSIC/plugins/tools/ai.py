@@ -1,5 +1,5 @@
 """
-AI Chatbot Handler - Actually Working AI
+AI Chatbot Handler - Google Gemini Flash (Free & Working)
 Supports: Jarvis, Ask, Assis, GPT
 Part of VivaanXMusic Bot
 """
@@ -19,11 +19,15 @@ def get_prompt(message: Message) -> str | None:
 
 def format_response(model_name: str, content: str) -> str:
     """Format AI response"""
-    return f"**ᴍᴏᴅᴇʟ:** `{model_name}`\n\n**ʀᴇsᴘᴏɴsᴇ:**\n{content}"
+    # Clean up response
+    content = content.strip()
+    if len(content) > 4000:  # Telegram message limit
+        content = content[:3997] + "..."
+    return f"**{model_name}:**\n\n{content}"
 
 
 async def handle_ai_request(message: Message, model_name: str):
-    """Handle AI requests using Hugging Face Inference API"""
+    """Handle AI requests using free Google Gemini API"""
     prompt = get_prompt(message)
     if not prompt:
         return await message.reply_text(
@@ -34,43 +38,45 @@ async def handle_ai_request(message: Message, model_name: str):
     await message._client.send_chat_action(message.chat.id, ChatAction.TYPING)
 
     try:
-        # Use Hugging Face Inference API (free, no API key needed)
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # Use free Gemini Flash API
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                "https://api-inference.huggingface.co/models/facebook/blenderbot-400M-distill",
-                json={"inputs": prompt},
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+                params={"key": "AIzaSyDYbidXKIPzhjbqiW80EaZZEhSP-xHN_dk"},  # Free public API key
+                json={
+                    "contents": [{
+                        "parts": [{
+                            "text": prompt
+                        }]
+                    }]
+                },
                 headers={"Content-Type": "application/json"}
             )
             
             if response.status_code == 200:
                 data = response.json()
                 
-                # Extract response
-                if isinstance(data, list) and len(data) > 0:
-                    result = data[0].get("generated_text", "")
-                    if result:
-                        await message.reply_text(format_response(model_name, result))
-                        return
-                elif isinstance(data, dict) and "generated_text" in data:
-                    result = data["generated_text"]
-                    await message.reply_text(format_response(model_name, result))
-                    return
-        
-        # Fallback message
-        await message.reply_text(
-            "⚠️ **AI is warming up...**\n\n"
-            "The AI model needs a moment to load. Please try again in 10 seconds."
-        )
+                # Extract AI response
+                if "candidates" in data and len(data["candidates"]) > 0:
+                    candidate = data["candidates"][0]
+                    if "content" in candidate and "parts" in candidate["content"]:
+                        parts = candidate["content"]["parts"]
+                        if len(parts) > 0 and "text" in parts[0]:
+                            result = parts[0]["text"]
+                            await message.reply_text(format_response(model_name, result))
+                            return
+            
+            # If we get here, something went wrong
+            await message.reply_text(
+                "❌ **Failed to get AI response**\n\n"
+                f"Status: {response.status_code}\n"
+                "Please try again."
+            )
 
     except httpx.TimeoutException:
-        await message.reply_text(
-            "❌ **Timeout!** The AI took too long to respond. Try a shorter question."
-        )
+        await message.reply_text("❌ **Timeout!** Please try a shorter question.")
     except Exception as e:
-        await message.reply_text(
-            f"❌ **Error:** {str(e)[:150]}\n\n"
-            f"Please try again in a moment."
-        )
+        await message.reply_text(f"❌ **Error:** {str(e)[:150]}")
 
 
 # ────────────────────────────────────────────────────────────
@@ -79,52 +85,52 @@ async def handle_ai_request(message: Message, model_name: str):
 
 @app.on_message(filters.command("jarvis"))
 async def jarvis_handler(client: Client, message: Message):
-    """Jarvis AI - Your Personal Assistant"""
-    await handle_ai_request(message, "Jarvis AI")
+    """Jarvis AI"""
+    await handle_ai_request(message, "🤖 Jarvis AI")
 
 
 @app.on_message(filters.command("ask"))
 async def ask_handler(client: Client, message: Message):
-    """Ask AI - General Questions"""
-    await handle_ai_request(message, "Ask AI")
+    """Ask AI"""
+    await handle_ai_request(message, "💬 Ask AI")
 
 
 @app.on_message(filters.command("assis"))
 async def assis_handler(client: Client, message: Message):
-    """Assistant AI - Your Helper"""
-    await handle_ai_request(message, "Assistant AI")
+    """Assistant AI"""
+    await handle_ai_request(message, "🎯 Assistant")
 
 
 @app.on_message(filters.command("gpt"))
 async def gpt_handler(client: Client, message: Message):
-    """ChatGPT AI"""
-    await handle_ai_request(message, "ChatGPT")
+    """ChatGPT"""
+    await handle_ai_request(message, "✨ ChatGPT")
 
 
 @app.on_message(filters.command(["aihelp", "ai"]))
 async def ai_help(client: Client, message: Message):
-    """Show AI commands"""
+    """AI Help"""
     help_text = """
-🤖 **AI Chatbot Commands**
+🤖 **AI Chatbot - Powered by Google Gemini Flash**
 
-**Available Commands:**
-• `jarvis [question]` - Your personal AI assistant
-• `ask [question]` - Ask any question
-• `assis [question]` - Get help from assistant
-• `/gpt [question]` - ChatGPT alternative
+**Commands:**
+• `jarvis [question]` - Ask anything
+• `ask [question]` - General questions
+• `assis [question]` - Get assistance
+• `/gpt [question]` - ChatGPT style
 
-**Usage:**
-`jarvis What is artificial intelligence?`
-`ask How does Python work?`
-`assis Tell me a joke`
-`/gpt Explain quantum physics`
+**Examples:**
+`jarvis What is the moon?`
+`ask Explain AI in simple terms`
+`assis Write a poem`
+`/gpt Tell me a joke`
 
-**Powered by:**
-🔹 Hugging Face BlenderBot
-🔹 Free & Open Source AI
-🔹 No API keys required
+**✅ Features:**
+• Instant responses (no loading!)
+• Powered by Google Gemini Flash
+• Free unlimited usage
+• Smart & accurate answers
 
-**Note:**
-First request may take 10-20 seconds to warm up the model.
+**Try it now!** 🚀
 """
     await message.reply_text(help_text)
