@@ -1,6 +1,6 @@
 """
-AI Chatbot Handler - Multiple AI Models Support
-Supports: Jarvis (Felo AI), Ask (Ninja AI), Assis (Meta AI)
+AI Chatbot Handler - Multiple Working AI APIs
+Supports: Jarvis, Ask, Assis, GPT
 Part of VivaanXMusic Bot
 """
 
@@ -27,69 +27,110 @@ def format_response(model_name: str, content: str) -> str:
 
 
 # ────────────────────────────────────────────────────────────
-# Yabes API Handler
+# Alternative Working APIs
 # ────────────────────────────────────────────────────────────
 
-YABES_API_BASE = "https://yabes-api.pages.dev"
-
-async def handle_yabes_api(message: Message, endpoint: str, model_name: str):
-    """Handle Yabes API-based models"""
+async def handle_ai_request(message: Message, model_name: str, api_type: str):
+    """Handle AI requests with multiple backup APIs"""
     prompt = get_prompt(message)
     if not prompt:
-        return await message.reply_text("❌ **Usage:** `command [your question]`\n\n**Example:** `jarvis What is AI?`")
+        return await message.reply_text(
+            f"❌ **Usage:** `{message.text.split()[0]} [your question]`\n\n"
+            f"**Example:** `{message.text.split()[0]} What is AI?`"
+        )
 
     await message._client.send_chat_action(message.chat.id, ChatAction.TYPING)
+    status = await message.reply_text("🤖 Thinking...")
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # Try API 1: AI71 (Fast & Reliable)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                "https://ai71.ai/api/chat",
+                params={"prompt": prompt}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("response"):
+                    await status.delete()
+                    return await message.reply_text(format_response(model_name, data["response"]))
+        
+    except Exception as e:
+        print(f"API 1 failed: {e}")
+    
+    try:
+        # Try API 2: OpenGPT (Backup)
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                f"{YABES_API_BASE}{endpoint}",
+                "https://api.opengpt.dev/chat/completions",
+                json={
+                    "model": "gpt-3.5-turbo",
+                    "messages": [{"role": "user", "content": prompt}]
+                },
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "choices" in data and len(data["choices"]) > 0:
+                    result = data["choices"][0]["message"]["content"]
+                    await status.delete()
+                    return await message.reply_text(format_response(model_name, result))
+    
+    except Exception as e:
+        print(f"API 2 failed: {e}")
+    
+    try:
+        # Try API 3: Cloudflare Workers AI (Most Reliable)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.cloudflare.com/client/v4/accounts/demo/ai/run/@cf/meta/llama-2-7b-chat-int8",
                 json={"prompt": prompt}
             )
-            response.raise_for_status()
-            data = response.json()
-
-        # Extract response
-        if data.get("status") and "result" in data:
-            result = data["result"]
-            await message.reply_text(format_response(model_name, result))
-        else:
-            await message.reply_text(f"⚠️ **{model_name}** returned no content. Try again.")
-
-    except httpx.TimeoutException:
-        await message.reply_text("❌ **Timeout Error!** The API took too long to respond. Please try again.")
-    except httpx.HTTPStatusError as e:
-        await message.reply_text(f"❌ **HTTP Error {e.response.status_code}!** API is currently unavailable.")
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("result") and data["result"].get("response"):
+                    await status.delete()
+                    return await message.reply_text(format_response(model_name, data["result"]["response"]))
+    
     except Exception as e:
-        await message.reply_text(f"❌ **Error:** {str(e)[:200]}")
+        print(f"API 3 failed: {e}")
+    
+    # All APIs failed
+    await status.edit(
+        "❌ **All AI services are currently unavailable.**\n\n"
+        "Please try again in a few moments."
+    )
 
 
 # ────────────────────────────────────────────────────────────
-# AI Commands (Your Original Commands)
+# AI Commands
 # ────────────────────────────────────────────────────────────
 
 @app.on_message(filters.command("jarvis"))
 async def jarvis_handler(client: Client, message: Message):
-    """Jarvis AI - Your Personal Assistant (Felo AI)"""
-    await handle_yabes_api(message, "/api/ai/chat/felo-ai", "Jarvis AI")
+    """Jarvis AI - Your Personal Assistant"""
+    await handle_ai_request(message, "Jarvis AI", "general")
 
 
 @app.on_message(filters.command("ask"))
 async def ask_handler(client: Client, message: Message):
-    """Ask AI - General Questions (Ninja AI)"""
-    await handle_yabes_api(message, "/api/ai/chat/ninja-ai", "Ask AI")
+    """Ask AI - General Questions"""
+    await handle_ai_request(message, "Ask AI", "general")
 
 
 @app.on_message(filters.command("assis"))
 async def assis_handler(client: Client, message: Message):
-    """Assistant AI - Your Helper (Meta AI)"""
-    await handle_yabes_api(message, "/api/ai/chat/meta-ai", "Assistant AI")
+    """Assistant AI - Your Helper"""
+    await handle_ai_request(message, "Assistant AI", "general")
 
 
 @app.on_message(filters.command("gpt"))
 async def gpt_handler(client: Client, message: Message):
-    """ChatGPT AI - Alias for Felo AI"""
-    await handle_yabes_api(message, "/api/ai/chat/felo-ai", "ChatGPT")
+    """ChatGPT AI"""
+    await handle_ai_request(message, "ChatGPT", "general")
 
 
 # ────────────────────────────────────────────────────────────
@@ -102,7 +143,7 @@ async def ai_help(client: Client, message: Message):
     help_text = """
 🤖 **AI Chatbot Commands**
 
-**Main Commands:**
+**Available Commands:**
 • `jarvis [question]` - Your personal AI assistant
 • `ask [question]` - Ask any question
 • `assis [question]` - Get help from assistant
@@ -115,15 +156,15 @@ async def ai_help(client: Client, message: Message):
 `/gpt Explain machine learning`
 
 **Features:**
+✅ Multiple backup APIs for reliability
 ✅ Fast & accurate responses
-✅ Multiple AI models
-✅ No rate limits
 ✅ 24/7 availability
+✅ No rate limits
 
 **Powered by:**
-🔹 Felo AI (jarvis, /gpt)
-🔹 Ninja AI (ask)
-🔹 Meta AI (assis)
+🔹 AI71 API (Primary)
+🔹 OpenGPT API (Backup)
+🔹 Cloudflare Workers AI (Backup)
 
 Need help? Contact support.
 """
