@@ -54,31 +54,32 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
     Uses USERBOT client to access full bio data
     
     Args:
-        client (Client): Pyrogram client (should be userbot)
+        client (Client): Pyrogram client (bot client)
         user_id (int): User ID to check
         
     Returns:
         Tuple[bool, str]: (has_link, bio_text)
     """
     try:
-        # Import userbot client
-        from VIVAANXMUSIC.core.userbot import Userbot
+        # Import the assistants list from your bot structure
+        from VIVAANXMUSIC.core.userbot import assistants
         
-        # Use userbot to get full user data including bio
-        # Userbot clients can access bios that bot clients can't
-        userbot_clients = Userbot()
-        
-        # Try with first available userbot
+        # Try to get user bio using assistant (userbot)
         user = None
-        for userbot in userbot_clients:
-            try:
-                user = await userbot.get_users(user_id)
-                break
-            except:
-                continue
         
-        if not user:
-            # Fallback to bot client (won't work for bot accounts)
+        # assistants is a list of userbot clients in VivaanXmusic
+        if assistants:
+            # Try with first assistant
+            try:
+                user = await assistants[0].get_users(user_id)
+                print(f"[Security] Successfully got bio using assistant for user {user_id}")
+            except Exception as e:
+                print(f"[Security] Assistant failed, trying bot client: {e}")
+                # Fallback to bot client
+                user = await client.get_users(user_id)
+        else:
+            # No assistants available, use bot client
+            print(f"[Security] No assistants available, using bot client")
             user = await client.get_users(user_id)
         
         bio = user.bio or ""
@@ -98,26 +99,26 @@ async def check_bio(client: Client, user_id: int) -> Tuple[bool, str]:
         
     except Exception as e:
         print(f"[Security] Error checking bio for user {user_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return False, ""
 
 
 async def check_bio_detailed(client: Client, user_id: int) -> dict:
     """Check user bio with detailed information using userbot"""
     try:
-        # Import userbot client
-        from VIVAANXMUSIC.core.userbot import Userbot
-        
-        userbot_clients = Userbot()
+        # Import the assistants list
+        from VIVAANXMUSIC.core.userbot import assistants
         
         user = None
-        for userbot in userbot_clients:
-            try:
-                user = await userbot.get_users(user_id)
-                break
-            except:
-                continue
         
-        if not user:
+        if assistants:
+            try:
+                user = await assistants[0].get_users(user_id)
+            except Exception as e:
+                print(f"[Security] Assistant failed in detailed check: {e}")
+                user = await client.get_users(user_id)
+        else:
             user = await client.get_users(user_id)
         
         bio = user.bio or ""
@@ -134,6 +135,8 @@ async def check_bio_detailed(client: Client, user_id: int) -> dict:
         }
     except Exception as e:
         print(f"[Security] Error in detailed bio check: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "has_link": False,
             "bio": "",
