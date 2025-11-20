@@ -35,7 +35,7 @@ import config
 
 # MongoDB client and database
 MONGO_CLIENT = motor.motor_asyncio.AsyncIOMotorClient(config.MONGO_DB_URI)
-MONGO_DB = MONGO_CLIENT.get_database()
+MONGO_DB = MONGO_CLIENT["VivaanXMusic"]  # ✅ Database name specified
 
 
 async def initialize_security_systems():
