@@ -50,17 +50,6 @@ class AntiEditManager:
         self.message_cache: Dict[str, Dict] = {}  # Store original messages
     
     async def is_admin(self, client: Client, chat_id: int, user_id: int) -> bool:
-        """
-        Check if user is admin in chat
-        
-        Args:
-            client: Pyrogram client
-            chat_id: Chat ID
-            user_id: User ID
-            
-        Returns:
-            bool: True if admin
-        """
         try:
             member = await client.get_chat_member(chat_id, user_id)
             return member.status in ["creator", "administrator"]
@@ -71,7 +60,6 @@ class AntiEditManager:
             return False
     
     async def is_owner(self, user_id: int) -> bool:
-        """Check if user is bot owner"""
         return user_id == OWNER_ID
     
     async def should_detect_edit(
@@ -81,39 +69,22 @@ class AntiEditManager:
         user_id: int,
         message_id: int
     ) -> bool:
-        """
-        Determine if edit should be detected
-        
-        Args:
-            client: Pyrogram client
-            chat_id: Chat ID
-            user_id: User ID
-            message_id: Message ID
-            
-        Returns:
-            bool: True if should detect
-        """
         try:
             if not edit_tracker_db:
                 return False
             
-            # Get config
             config = await edit_tracker_db.get_config(chat_id)
             
-            # Check if enabled
             if not config.get("enabled", True):
                 return False
             
-            # Skip owner
             if await self.is_owner(user_id):
                 return False
             
-            # Skip admins if configured
             if config.get("exclude_admins", True):
                 if await self.is_admin(client, chat_id, user_id):
                     return False
             
-            # Skip owner of group
             if config.get("exclude_owner", True):
                 try:
                     chat = await client.get_chat(chat_id)
@@ -134,18 +105,6 @@ class AntiEditManager:
         message_id: int,
         warning_time: int = 60
     ) -> Optional[Message]:
-        """
-        Send warning message
-        
-        Args:
-            client: Pyrogram client
-            chat_id: Chat ID
-            message_id: Original message ID
-            warning_time: Warning time in seconds
-            
-        Returns:
-            Message: Sent warning message or None
-        """
         try:
             warning_text = EDIT_WARNING_MESSAGE.format(time=warning_time)
             
@@ -170,25 +129,12 @@ class AntiEditManager:
         warning_msg_id: Optional[int] = None,
         delete_after_seconds: int = 60
     ):
-        """
-        Schedule message deletion
-        
-        Args:
-            client: Pyrogram client
-            chat_id: Chat ID
-            message_id: Message ID to delete
-            user_id: User ID
-            warning_msg_id: Warning message ID (for cleanup)
-            delete_after_seconds: Seconds until deletion
-        """
         task_key = f"{chat_id}_{message_id}"
         
-        # Cancel existing task if any
         if task_key in self.pending_tasks:
             self.pending_tasks[task_key].cancel()
         
         try:
-            # Add to database
             if edit_tracker_db:
                 await edit_tracker_db.add_pending_deletion(
                     chat_id=chat_id,
@@ -198,12 +144,9 @@ class AntiEditManager:
                     delete_in_seconds=delete_after_seconds
                 )
             
-            # Create deletion task
             async def delete_after_delay():
                 try:
                     await asyncio.sleep(delete_after_seconds)
-                    
-                    # Delete original message
                     try:
                         await client.delete_messages(chat_id, message_id)
                         logger.info(f"[AntiEdit] Deleted message {chat_id}/{message_id}")
@@ -212,7 +155,6 @@ class AntiEditManager:
                     except Exception as e:
                         logger.error(f"[AntiEdit] Error deleting message: {e}")
                     
-                    # Delete warning message
                     if warning_msg_id:
                         try:
                             await client.delete_messages(chat_id, warning_msg_id)
@@ -220,9 +162,7 @@ class AntiEditManager:
                         except:
                             pass
                     
-                    # Mark as done in database
                     if edit_tracker_db:
-                        # Get the pending deletion ID
                         pending = await edit_tracker_db.pending_deletions_collection.find_one({
                             "chat_id": chat_id,
                             "message_id": message_id,
@@ -236,11 +176,9 @@ class AntiEditManager:
                 except Exception as e:
                     logger.error(f"[AntiEdit] Error in deletion task: {e}")
                 finally:
-                    # Remove from pending tasks
                     if task_key in self.pending_tasks:
                         del self.pending_tasks[task_key]
             
-            # Store task
             task = asyncio.create_task(delete_after_delay())
             self.pending_tasks[task_key] = task
             
@@ -256,16 +194,6 @@ class AntiEditManager:
         original_text: str,
         edited_text: str
     ):
-        """
-        Log edited message
-        
-        Args:
-            chat_id: Chat ID
-            user_id: User ID
-            message_id: Message ID
-            original_text: Original text
-            edited_text: Edited text
-        """
         try:
             if edit_tracker_db:
                 await edit_tracker_db.log_edit(
@@ -281,32 +209,19 @@ class AntiEditManager:
             logger.error(f"[AntiEdit] Error logging edit: {e}")
 
 
-# Initialize manager
 anti_edit_manager = AntiEditManager()
 
 
-# ────────────────────────────────────────────────────────────
-# Event Handlers
-# ────────────────────────────────────────────────────────────
-
 @app.on_edited_message(filters.group)
 async def handle_edited_message(client: Client, message: Message):
-    """
-    Handle edited messages in groups
-    
-    Args:
-        client: Pyrogram client
-        message: Edited message
-    """
     try:
         chat_id = message.chat.id
         user_id = message.from_user.id if message.from_user else None
-        message_id = message.message_id
+        message_id = message.id  # Fixed here
         
         if not user_id:
             return
         
-        # Check if should detect
         should_detect = await anti_edit_manager.should_detect_edit(
             client,
             chat_id,
@@ -318,23 +233,19 @@ async def handle_edited_message(client: Client, message: Message):
             logger.debug(f"[AntiEdit] Edit not detected for {message_id}")
             return
         
-        # Get config
         config = await edit_tracker_db.get_config(chat_id)
         warning_time = config.get("warning_time", EDIT_DELETE_TIME)
         
-        # Get original message for logging
         original_text = message.text or message.caption or "[non-text content]"
         
-        # Log the edit
         await anti_edit_manager.log_edit(
             chat_id,
             user_id,
             message_id,
             original_text[:200],
-            original_text[:200]  # We don't have original, just store current
+            original_text[:200]
         )
         
-        # Send warning
         warning_msg = await anti_edit_manager.send_warning(
             client,
             chat_id,
@@ -342,9 +253,8 @@ async def handle_edited_message(client: Client, message: Message):
             warning_time
         )
         
-        warning_msg_id = warning_msg.message_id if warning_msg else None
+        warning_msg_id = warning_msg.id if warning_msg else None  # Fixed here
         
-        # Schedule deletion
         await anti_edit_manager.schedule_deletion(
             client,
             chat_id,
@@ -360,23 +270,9 @@ async def handle_edited_message(client: Client, message: Message):
         logger.error(f"[AntiEdit] Error handling edited message: {e}")
 
 
-# ────────────────────────────────────────────────────────────
-# Admin Commands
-# ────────────────────────────────────────────────────────────
-
 @app.on_message(filters.command("antiedit") & filters.group)
 async def antiedit_command(client: Client, message: Message):
-    """
-    Configure anti-edit detection
-    
-    /antiedit - Show status
-    /antiedit enable - Enable feature
-    /antiedit disable - Disable feature
-    /antiedit time 120 - Set warning time
-    /antiedit admins yes/no - Exempt admins
-    """
     try:
-        # Check if user is admin
         user = await client.get_chat_member(message.chat.id, message.from_user.id)
         if user.status not in ["creator", "administrator"]:
             return await message.reply_text("❌ **Admin only**")
@@ -387,9 +283,7 @@ async def antiedit_command(client: Client, message: Message):
         parts = message.text.split()
         
         if len(parts) == 1:
-            # Show status
             config = await edit_tracker_db.get_config(message.chat.id)
-            
             status_text = (
                 f"🔍 **Anti-Edit Detection Status**\n\n"
                 f"**Enabled:** {'✅ Yes' if config.get('enabled') else '❌ No'}\n"
@@ -398,7 +292,6 @@ async def antiedit_command(client: Client, message: Message):
                 f"**Exclude Owner:** {'✅ Yes' if config.get('exclude_owner') else '❌ No'}\n"
                 f"**Delete Warning:** {'✅ Yes' if config.get('delete_warning_msg') else '❌ No'}\n"
             )
-            
             return await message.reply_text(status_text)
         
         command = parts[1].lower()
@@ -414,24 +307,20 @@ async def antiedit_command(client: Client, message: Message):
         elif command == "time":
             if len(parts) < 3:
                 return await message.reply_text("❌ **Usage:** `/antiedit time [seconds]`")
-            
             try:
                 seconds = int(parts[2])
                 if not (10 <= seconds <= 300):
                     return await message.reply_text("❌ **Valid range:** 10-300 seconds")
-                
                 await edit_tracker_db.set_warning_time(message.chat.id, seconds)
                 await message.reply_text(f"✅ **Warning time set to {seconds} seconds**")
             except ValueError:
-                await message.reply_text("❌ **Invalid number**")
+                return await message.reply_text("❌ **Invalid number**")
         
         elif command == "admins":
             if len(parts) < 3:
                 return await message.reply_text("❌ **Usage:** `/antiedit admins yes/no`")
-            
             exempt = parts[2].lower() == "yes"
             await edit_tracker_db.set_admin_exemption(message.chat.id, exempt)
-            
             status = "will be exempt" if exempt else "won't be exempt"
             await message.reply_text(f"✅ **Admins {status} from edit detection**")
         
@@ -445,7 +334,6 @@ async def antiedit_command(client: Client, message: Message):
                 "`/antiedit time [sec]` - Set warning time\n"
                 "`/antiedit admins yes/no` - Exempt admins"
             )
-    
     except Exception as e:
         logger.error(f"[AntiEdit] Error in command: {e}")
         await message.reply_text(f"❌ **Error:** {str(e)[:100]}")
@@ -453,18 +341,13 @@ async def antiedit_command(client: Client, message: Message):
 
 @app.on_message(filters.command("antiedit_stats") & filters.group)
 async def antiedit_stats_command(client: Client, message: Message):
-    """Show anti-edit statistics"""
     try:
-        # Check if admin
         user = await client.get_chat_member(message.chat.id, message.from_user.id)
         if user.status not in ["creator", "administrator"]:
             return await message.reply_text("❌ **Admin only**")
-        
         if not edit_tracker_db:
             return await message.reply_text("❌ **Database not initialized**")
-        
         stats = await edit_tracker_db.get_stats(message.chat.id)
-        
         stats_text = (
             f"📊 **Anti-Edit Statistics**\n\n"
             f"**Pending Deletions:** {stats.get('pending_deletions', 0)}\n"
@@ -472,27 +355,17 @@ async def antiedit_stats_command(client: Client, message: Message):
             f"**Total Edits Logged:** {stats.get('total_edits_logged', 0)}\n"
             f"**Warning Time:** {stats.get('warning_time', 60)} seconds\n"
         )
-        
         await message.reply_text(stats_text)
-    
     except Exception as e:
         logger.error(f"[AntiEdit] Error in stats command: {e}")
         await message.reply_text(f"❌ **Error:** {str(e)[:100]}")
 
 
-# ────────────────────────────────────────────────────────────
-# Cleanup on Startup
-# ────────────────────────────────────────────────────────────
-
 async def cleanup_on_startup(client: Client):
-    """Cleanup pending deletions on startup"""
     try:
         if not edit_tracker_db:
             return
-        
-        # Clean up pending deletions older than 1 hour
         await edit_tracker_db.cleanup_old_data(days=0)
-        
         logger.info("[AntiEdit] Cleanup completed on startup")
     except Exception as e:
         logger.error(f"[AntiEdit] Error during cleanup: {e}")
