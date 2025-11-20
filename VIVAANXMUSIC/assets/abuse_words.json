@@ -1,0 +1,2372 @@
+{
+  "version": "2.0",
+  "last_updated": "2025-11-20",
+  "description": "Comprehensive abusive words list for VivaanXMusic4.0 Anti-Abuse System - English & Hindi/Hinglish",
+  "total_words": 547,
+  "default_words": [
+    {
+      "word": "2g1c",
+      "severity": "high",
+      "category": "extreme"
+    },
+    {
+      "word": "2 girls 1 cup",
+      "severity": "high",
+      "category": "extreme"
+    },
+    {
+      "word": "4r5e",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "anal",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "anus",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "arse",
+      "severity": "medium",
+      "category": "profanity"
+    },
+    {
+      "word": "ass",
+      "severity": "medium",
+      "category": "profanity"
+    },
+    {
+      "word": "asses",
+      "severity": "medium",
+      "category": "profanity"
+    },
+    {
+      "word": "assfucker",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "assfukka",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "asshole",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "arsehole",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "asswhole",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "assmunch",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "auto erotic",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "autoerotic",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "ballsack",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "bastard",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "beastial",
+      "severity": "high",
+      "category": "extreme"
+    },
+    {
+      "word": "bestial",
+      "severity": "high",
+      "category": "extreme"
+    },
+    {
+      "word": "bhen ka lode",
+      "severity": "high",
+      "category": "hinglish_offensive"
+    },
+    {
+      "word": "betichod",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhenchod",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bellend",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "bdsm",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "beastiality",
+      "severity": "high",
+      "category": "extreme"
+    },
+    {
+      "word": "bestiality",
+      "severity": "high",
+      "category": "extreme"
+    },
+    {
+      "word": "bitch",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "bitches",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "bitchin",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "bitching",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "bimbo",
+      "severity": "low",
+      "category": "offensive"
+    },
+    {
+      "word": "bimbos",
+      "severity": "low",
+      "category": "offensive"
+    },
+    {
+      "word": "blow job",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "blowjob",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "blowjobs",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "blue waffle",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "boob",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "boobs",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "booobs",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "boooobs",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "booooobs",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "booooooobs",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "breasts",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "booty call",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "brown shower",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "brown showers",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "boner",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "bondage",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "buceta",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "bukake",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "bukkake",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "bullshit",
+      "severity": "medium",
+      "category": "profanity"
+    },
+    {
+      "word": "bull shit",
+      "severity": "medium",
+      "category": "profanity"
+    },
+    {
+      "word": "busty",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "butthole",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "carpet muncher",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cawk",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "chink",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "chut",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "chutiya",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "cipa",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "clit",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "clits",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "clitoris",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "cnut",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "cock",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "chod dunga",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "cocks",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cockface",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "cockhead",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "cockmunch",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cockmuncher",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "cocksuck",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cocksucked",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cocksucking",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cocksucks",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cocksucker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "cokmuncher",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "coon",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "cow girl",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "cow girls",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "cowgirl",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "cowgirls",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "crap",
+      "severity": "low",
+      "category": "profanity"
+    },
+    {
+      "word": "crotch",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "cum",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cummer",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cumming",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cuming",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cums",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cumshot",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cunilingus",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cunillingus",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cunnilingus",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cunt",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "cuntlicker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "cuntlicking",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "cunts",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "damn",
+      "severity": "low",
+      "category": "profanity"
+    },
+    {
+      "word": "dick",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "dickhead",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "dildo",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "dildos",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "dink",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "dinks",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "deepthroat",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "deep throat",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "dog style",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "doggie style",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "doggiestyle",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "doggy style",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "doggystyle",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "donkeyribber",
+      "severity": "high",
+      "category": "extreme"
+    },
+    {
+      "word": "doosh",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "douche",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "duche",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "dyke",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "ejaculate",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "ejaculated",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "ejaculates",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "ejaculating",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "ejaculatings",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "ejaculation",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "ejakulate",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "erotic",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "erotism",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "fag",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "fuddi",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "fuddu",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "faggot",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "fagging",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "faggit",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "faggitt",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "faggs",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "fagot",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "fagots",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "fags",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "fatass",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "femdom",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "fingering",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "footjob",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "foot job",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "fuck",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "fucks",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "fucker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "fuckers",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "fucked",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "fuckhead",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "fuckheads",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "fuckin",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "fucking",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "fcuk",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "fcuker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "fcuking",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "felching",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "fellate",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "fellatio",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "fingerfuck",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "fingerfucked",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "fingerfucker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "fingerfuckers",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "fingerfucking",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "fingerfucks",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "fistfuck",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "fistfucked",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "fistfucker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "fistfuckers",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "fistfucking",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "fistfuckings",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "fistfucks",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "flange",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "fook",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "fooker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "fucka",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "fuk",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "fuks",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "fuker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "fukker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "fukkin",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "fukking",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "futanari",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "futanary",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "gangbang",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "gangbanged",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "gang bang",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "gokkun",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "golden shower",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "goldenshower",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "gaysex",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "gand",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "gand mara",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "goatse",
+      "severity": "high",
+      "category": "extreme"
+    },
+    {
+      "word": "handjob",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "hand job",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "hentai",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "hooker",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "hoer",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "homo",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "horny",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "incest",
+      "severity": "high",
+      "category": "extreme"
+    },
+    {
+      "word": "jackoff",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "jack off",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "jerkoff",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "jerk off",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "jizz",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "knob",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "kinbaku",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "labia",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "lund",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "lun",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "lawda",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "lavda",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "masturbate",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "masochist",
+      "severity": "medium",
+      "category": "extreme"
+    },
+    {
+      "word": "mofo",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "mothafuck",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "motherfuck",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "motherfucker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "mothafucka",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "mothafuckas",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "mothafuckaz",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "mothafucked",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "mothafucker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "mothafuckers",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "mothafuckin",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "mothafucking",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "mothafuckings",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "mothafucks",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "mother fucker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "motherfucked",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "motherfuckers",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "motherfuckin",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "motherfucking",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "motherfuckings",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "motherfuckka",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "motherfucks",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "milf",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "muff",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "nigga",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "nigger",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "nigg",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "nipple",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "nipples",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "nob",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "nob jokey",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "nobhead",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "nobjocky",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "nobjokey",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "numbnuts",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "nutsack",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "nude",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "nudes",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "orgy",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "orgasm",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "orgasms",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "panty",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "panties",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "penis",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "playboy",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "porn",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "porno",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "pornography",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "pron",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "pussy",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "pussies",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "rape",
+      "severity": "high",
+      "category": "violence"
+    },
+    {
+      "word": "raping",
+      "severity": "high",
+      "category": "violence"
+    },
+    {
+      "word": "rapist",
+      "severity": "high",
+      "category": "violence"
+    },
+    {
+      "word": "rectum",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "retard",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "rimming",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "sadist",
+      "severity": "medium",
+      "category": "extreme"
+    },
+    {
+      "word": "sadism",
+      "severity": "medium",
+      "category": "extreme"
+    },
+    {
+      "word": "schlong",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "scrotum",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "sex",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "semen",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "shemale",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "she male",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "shibari",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "shibary",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "shit",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "shitdick",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "shitfuck",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "shitfull",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "shithead",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "shiting",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "shitings",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "shits",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "shitted",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "shitters",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "shitting",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "shittings",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "shitty",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "word": "shota",
+      "severity": "high",
+      "category": "extreme"
+    },
+    {
+      "word": "skank",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "slut",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "sluts",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "smut",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "smegma",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "spunk",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "strip club",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "stripclub",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "tit",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "tits",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "titties",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "titty",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "titfuck",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "tittiefucker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "tittywank",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "titwank",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "threesome",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "three some",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "throating",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "twat",
+      "severity": "high",
+      "category": "sexual"
+    },
+    {
+      "word": "twathead",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "twatty",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "twunt",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "viagra",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "vagina",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "vulva",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "wank",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "wanker",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "wanky",
+      "severity": "medium",
+      "category": "offensive"
+    },
+    {
+      "word": "whore",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "whoar",
+      "severity": "high",
+      "category": "offensive"
+    },
+    {
+      "word": "xxx",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "xx",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "yaoi",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "yury",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "sexy",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "aad",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "aand",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bahenchod",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "behenchod",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhenchodd",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "b.c.",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bc",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bakchod",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bakchodd",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bakchodi",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhadua",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhaduaa",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhadva",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhadvaa",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhadwa",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhadwaa",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhosada",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhosda",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhosdaa",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhosdike",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhonsdike",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bsdk",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "b.s.d.k",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhosdiki",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhosdiwala",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhosdiwale",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhosadchodal",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bhosadchod",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "babbe",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "babbey",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bube",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bubey",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "bur",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "burr",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "buurr",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "buur",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "charsi",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "chooche",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "choochi",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "chuchi",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "chhod",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "chod",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "chodd",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "chudne",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "chudney",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "chudwa",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "chudwaa",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "chudwane",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "chudwaane",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "choot",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "dalaal",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "dalal",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "dalle",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "dalley",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "fattu",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "gadhalund",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "gaand",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "gandu",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "gandfat",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "gandfut",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "gandiya",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "gandiye",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "goo",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "gu",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "gote",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "gotey",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "gotte",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "haggu",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "hagne",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "hagney",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "harami",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "jhat",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "jhaat",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "jhaatu",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "jhatu",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "kutiya",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "kuttiya",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "kutti",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "landi",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "landy",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "laude",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "laudey",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "laura",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "lora",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "lauda",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "ling",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "loda",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "lode",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "launda",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "lounde",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "laundey",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "laundi",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "loundi",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "lulli",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "madarchod",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "madarchodd",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "madarchood",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "madarchoot",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "madarchut",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "m.c.",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "mc",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "mamme",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "mammey",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "moot",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "mut",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "mootne",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "mutne",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "mooth",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "muth",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "nunni",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "nunnu",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "paaji",
+      "severity": "medium",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "paji",
+      "severity": "medium",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "pesaab",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "pesab",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "peshaab",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "peshab",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "pilla",
+      "severity": "medium",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "pillay",
+      "severity": "medium",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "pille",
+      "severity": "medium",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "pilley",
+      "severity": "medium",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "pisaab",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "pisab",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "pkmkb",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "porkistan",
+      "severity": "high",
+      "category": "hate_speech"
+    },
+    {
+      "word": "raand",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "rand",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "randi",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "randy",
+      "severity": "medium",
+      "category": "sexual"
+    },
+    {
+      "word": "suar",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "tatte",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "tatti",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "tatty",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "ullu",
+      "severity": "high",
+      "category": "hindi_offensive"
+    },
+    {
+      "word": "virgin",
+      "severity": "low",
+      "category": "sexual"
+    },
+    {
+      "word": "muh me legi",
+      "severity": "high",
+      "category": "hindi_offensive"
+    }
+  ],
+  "severity_levels": {
+    "high": {
+      "description": "Extremely offensive or hateful language",
+      "recommended_action": "immediate_action"
+    },
+    "medium": {
+      "description": "Offensive language, not extreme",
+      "recommended_action": "mute_or_warn"
+    },
+    "low": {
+      "description": "Mildly offensive language",
+      "recommended_action": "warn_only"
+    }
+  },
+  "categories": {
+    "profanity": "General profane language (English)",
+    "offensive": "Personally offensive terms (English)",
+    "hate_speech": "Discriminatory or hateful language (English)",
+    "violence": "Violent or threatening language (English)",
+    "sexual": "Sexual or adult content (English)",
+    "extreme": "Extremely offensive content (English)",
+    "hindi_offensive": "Offensive terms in Hindi/Hinglish",
+    "hinglish_offensive": "Mixed Hindi-English offensive terms"
+  }
+}
