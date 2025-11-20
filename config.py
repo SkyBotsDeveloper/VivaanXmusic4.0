@@ -75,6 +75,24 @@ STRING3 = getenv("STRING_SESSION3")
 STRING4 = getenv("STRING_SESSION4")
 STRING5 = getenv("STRING_SESSION5")
 
+# ── Anti-Edit Message Detection ────────────────────────────────────────────────
+EDIT_DELETE_TIME = int(getenv("EDIT_DELETE_TIME", "60"))  # seconds before deletion
+EDIT_WARNING_MESSAGE = getenv(
+    "EDIT_WARNING_MESSAGE",
+    "⚠️ **Edited Message Detected**\n\n"
+    "Your edited message will be deleted in {time} seconds.\n\n"
+    "_Editing messages is not allowed in this group._"
+)
+
+# ── Anti-Abusive Word Detection ────────────────────────────────────────────────
+DEFAULT_WARNING_LIMIT = int(getenv("DEFAULT_WARNING_LIMIT", "3"))
+DEFAULT_ABUSE_ACTION = getenv("DEFAULT_ABUSE_ACTION", "delete_only")  # mute, ban, delete_only, warn_only
+DEFAULT_MUTE_DURATION = int(getenv("DEFAULT_MUTE_DURATION", "1440"))  # minutes (24 hours)
+ABUSE_WARNING_DELETE_TIME = int(getenv("ABUSE_WARNING_DELETE_TIME", "10"))  # seconds
+
+# Valid abuse actions
+VALID_ABUSE_ACTIONS = ["mute", "ban", "delete_only", "warn_only"]
+
 # ── Media assets ───────────────────────────────────────────────────────────────
 START_VIDS = [
     "https://files.catbox.moe/1jcn1p.mp4",
@@ -126,3 +144,7 @@ if not COOKIE_URL:
 # Only allow these cookie link formats
 if not re.match(r"^https://(batbin\.me|pastebin\.com)/[A-Za-z0-9]+$", COOKIE_URL):
     raise SystemExit("[ERROR] - Invalid COOKIE_URL. Use https://batbin.me/<id> or https://pastebin.com/<id>")
+
+# Validate abuse action
+if DEFAULT_ABUSE_ACTION not in VALID_ABUSE_ACTIONS:
+    raise SystemExit(f"[ERROR] - Invalid DEFAULT_ABUSE_ACTION. Must be one of: {', '.join(VALID_ABUSE_ACTIONS)}")
