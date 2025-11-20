@@ -286,7 +286,7 @@ anti_edit_manager = AntiEditManager()
 # Event Handlers
 # ────────────────────────────────────────────────────────────
 
-@anti_edit_manager.client.on_edited_message(filters.group)
+@Client.on_edited_message(filters.group)
 async def handle_edited_message(client: Client, message: Message):
     """
     Handle edited messages in groups
