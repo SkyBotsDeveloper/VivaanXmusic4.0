@@ -29,6 +29,9 @@ from config import (
     EDIT_WARNING_MESSAGE
 )
 
+# Import bot instance
+from VIVAANXMUSIC import app
+
 # Import database and utilities
 try:
     from VIVAANXMUSIC.mongo.edit_tracker_db import edit_tracker_db
@@ -286,7 +289,7 @@ anti_edit_manager = AntiEditManager()
 # Event Handlers
 # ────────────────────────────────────────────────────────────
 
-@Client.on_edited_message(filters.group)
+@app.on_edited_message(filters.group)
 async def handle_edited_message(client: Client, message: Message):
     """
     Handle edited messages in groups
@@ -318,7 +321,6 @@ async def handle_edited_message(client: Client, message: Message):
         # Get config
         config = await edit_tracker_db.get_config(chat_id)
         warning_time = config.get("warning_time", EDIT_DELETE_TIME)
-        delete_warning = config.get("delete_warning_msg", True)
         
         # Get original message for logging
         original_text = message.text or message.caption or "[non-text content]"
@@ -362,7 +364,7 @@ async def handle_edited_message(client: Client, message: Message):
 # Admin Commands
 # ────────────────────────────────────────────────────────────
 
-@Client.on_message(filters.command("antiedit") & filters.group)
+@app.on_message(filters.command("antiedit") & filters.group)
 async def antiedit_command(client: Client, message: Message):
     """
     Configure anti-edit detection
@@ -449,7 +451,7 @@ async def antiedit_command(client: Client, message: Message):
         await message.reply_text(f"❌ **Error:** {str(e)[:100]}")
 
 
-@Client.on_message(filters.command("antiedit_stats") & filters.group)
+@app.on_message(filters.command("antiedit_stats") & filters.group)
 async def antiedit_stats_command(client: Client, message: Message):
     """Show anti-edit statistics"""
     try:
