@@ -1,5 +1,7 @@
 import asyncio
 import importlib
+import json
+from pathlib import Path
 
 from pyrogram import idle
 from pytgcalls.exceptions import NoActiveGroupCall
@@ -12,6 +14,65 @@ from VIVAANXMUSIC.plugins import ALL_MODULES
 from VIVAANXMUSIC.utils.database import get_banned_users, get_gbanned
 from VIVAANXMUSIC.utils.cookie_handler import fetch_and_store_cookies
 from config import BANNED_USERS
+
+# Import security system initializer
+from VIVAANXMUSIC import initialize_security_systems
+
+
+async def load_default_abuse_words():
+    """
+    Load default abuse words from JSON on first startup
+    Only loads words that don't already exist in database
+    """
+    try:
+        from VIVAANXMUSIC.mongo.abuse_words_db import abuse_words_db
+        
+        json_path = Path("VIVAANXMUSIC/assets/abuse_words.json")
+        
+        if not json_path.exists():
+            LOGGER(__name__).warning("⚠️ Default abuse_words.json not found - skipping word loading")
+            return
+        
+        # Read JSON file
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        loaded_count = 0
+        skipped_count = 0
+        
+        # Load each word
+        for entry in data.get("default_words", []):
+            word = entry.get("word")
+            severity = entry.get("severity", "high")
+            
+            if not word:
+                continue
+            
+            # Check if word already exists
+            exists = await abuse_words_db.word_exists(word)
+            
+            if not exists:
+                # Add word to database
+                success = await abuse_words_db.add_abuse_word(
+                    word=word,
+                    severity=severity,
+                    patterns=[],
+                    added_by=0  # System added
+                )
+                
+                if success:
+                    loaded_count += 1
+            else:
+                skipped_count += 1
+        
+        total_words = len(data.get("default_words", []))
+        LOGGER(__name__).info(
+            f"📋 Abuse Words Loader: {loaded_count} new words added, "
+            f"{skipped_count} already existed (Total: {total_words})"
+        )
+        
+    except Exception as e:
+        LOGGER(__name__).error(f"❌ Failed to load default abuse words: {e}")
 
 
 async def init():
@@ -32,6 +93,22 @@ async def init():
     except Exception as e:
         LOGGER("VIVAANXMUSIC").warning(f"⚠️ᴄᴏᴏᴋɪᴇ ᴇʀʀᴏʀ: {e}")
 
+    # ✅ Initialize Security Systems (Anti-Edit & Anti-Abuse)
+    LOGGER("VIVAANXMUSIC").info("🔒 Initializing security systems...")
+    try:
+        await initialize_security_systems()
+        LOGGER("VIVAANXMUSIC").info("✅ Security systems initialized successfully")
+    except Exception as e:
+        LOGGER("VIVAANXMUSIC").error(f"❌ Security system initialization failed: {e}")
+        # Continue anyway - non-critical for music bot core functionality
+
+    # ✅ Load default abuse words
+    LOGGER("VIVAANXMUSIC").info("📋 Loading default abuse words...")
+    try:
+        await load_default_abuse_words()
+        LOGGER("VIVAANXMUSIC").info("✅ Abuse words loaded successfully")
+    except Exception as e:
+        LOGGER("VIVAANXMUSIC").error(f"❌ Abuse words loading failed: {e}")
 
     await sudo()
 
@@ -46,10 +123,22 @@ async def init():
         pass
 
     await app.start()
+    
+    # Load all modules
     for all_module in ALL_MODULES:
         importlib.import_module("VIVAANXMUSIC.plugins" + all_module)
 
     LOGGER("VIVAANXMUSIC.plugins").info("ᴀɴɴɪᴇ's ᴍᴏᴅᴜʟᴇs ʟᴏᴀᴅᴇᴅ...")
+    
+    # ✅ Explicitly import security plugins to ensure handlers are registered
+    try:
+        import VIVAANXMUSIC.plugins.admins.anti_edit
+        import VIVAANXMUSIC.plugins.admins.anti_abuse
+        LOGGER("VIVAANXMUSIC.plugins").info("🔒 Security plugins loaded (anti-edit & anti-abuse)")
+    except ImportError as e:
+        LOGGER("VIVAANXMUSIC.plugins").warning(f"⚠️ Security plugins not found: {e}")
+    except Exception as e:
+        LOGGER("VIVAANXMUSIC.plugins").error(f"❌ Error loading security plugins: {e}")
 
     await userbot.start()
     await JARVIS.start()
