@@ -62,6 +62,11 @@ WARNING_MESSAGE = (
 admin_cache: Dict[int, Dict[int, bool]] = {}
 cache_expiry = 300  # 5 minutes
 
+# In-memory message content cache to detect reaction-only updates.
+# Key: "chat_id:message_id" -> value: normalized content (text/caption or media marker)
+message_cache: Dict[str, str] = {}
+message_cache_expiry_seconds = 3600  # keep for 1 hour (simple; you can tune as needed)
+
 
 class AntiEditManager:
     """Manages anti-edit functionality across all groups."""
@@ -105,24 +110,55 @@ class AntiEditManager:
             logger.warning(f"Error checking admin status for user {user_id} in chat {chat_id}: {e}")
             return False
     
+    def _make_cache_key(self, chat_id: int, message_id: int) -> str:
+        return f"{chat_id}:{message_id}"
+    
+    def _normalize_message_content(self, message: Message) -> str:
+        """
+        Produce a normalized string representing the visible content of a message
+        (text, caption, or media-type marker). This helps detect if an edit changed
+        the visible content or only metadata / reactions.
+        """
+        if message.text:
+            return f"text:{message.text}"
+        if message.caption:
+            return f"caption:{message.caption}"
+        # For media-only messages (photos, stickers, voice, etc.), include media type
+        if message.media:
+            try:
+                mt = message.media.value  # pyrogram enums sometimes expose .value
+            except Exception:
+                mt = str(type(message.media))
+            return f"media:{mt}"
+        return "empty"
+    
     def is_reaction_update(self, message: Message) -> bool:
         """
         Check if the update is just an emoji reaction (not a text edit).
-        Telegram reactions don't trigger actual message edits in text content.
+        Uses the message cache: if the previous content equals the current content,
+        we treat it as a reaction/metadata update and skip deletion.
         
         Args:
             message: The edited message object
             
         Returns:
-            bool: True if it's a reaction, False if it's a real edit
+            bool: True if it's a reaction/metadata update, False if it's a real edit
         """
         # If message has no text/caption and no media change, it's likely just metadata
-        # Real edits will have text or caption
-        if not message.text and not message.caption:
+        if not message.text and not message.caption and not message.media:
             return True
         
-        # If the edit date and message date are very close (< 1 second), 
-        # it might be a reaction or other metadata update
+        # If we have the original content cached, compare it to current content.
+        key = self._make_cache_key(message.chat.id, message.id)
+        current_content = self._normalize_message_content(message)
+        previous_content = message_cache.get(key)
+        
+        if previous_content is not None:
+            if previous_content == current_content:
+                # Nothing visible changed — likely reactions/other metadata changed
+                return True
+        
+        # If there's no previous cached content, try the time-diff heuristic (existing behavior).
         if message.edit_date and message.date:
             time_diff = abs((message.edit_date - message.date).total_seconds())
             if time_diff < 1:
@@ -173,11 +209,6 @@ class AntiEditManager:
         if not user_id:
             return
         
-        # Skip if it's just a reaction or metadata update (not actual text edit)
-        if self.is_reaction_update(message):
-            logger.debug(f"Skipping reaction/metadata update in chat {chat_id}")
-            return
-        
         # Create unique identifier for this edit
         edit_key = f"{chat_id}:{message_id}:{user_id}"
         
@@ -188,8 +219,25 @@ class AntiEditManager:
         self.processing_edits.add(edit_key)
         
         try:
+            # Skip if it's just a reaction or metadata update (not actual text edit)
+            if self.is_reaction_update(message):
+                logger.debug(f"Skipping reaction/metadata update in chat {chat_id} for message {message_id}")
+                # Update cache to current content so future edits will be compared correctly
+                try:
+                    key = self._make_cache_key(chat_id, message_id)
+                    message_cache[key] = self._normalize_message_content(message)
+                except Exception:
+                    pass
+                return
+            
             # Check if we should delete this edit
             if not await self.should_delete_edit(chat_id, user_id):
+                # If we are not deleting, update cached content so subsequent edits compare correctly
+                try:
+                    key = self._make_cache_key(chat_id, message_id)
+                    message_cache[key] = self._normalize_message_content(message)
+                except Exception:
+                    pass
                 return
             
             # Send warning message
@@ -222,6 +270,14 @@ class AntiEditManager:
                         timestamp=datetime.utcnow()
                     )
                     
+                    # Also remove from cache (no longer exists)
+                    try:
+                        key = self._make_cache_key(chat_id, message_id)
+                        if key in message_cache:
+                            del message_cache[key]
+                    except Exception:
+                        pass
+                    
                 except MessageDeleteForbidden:
                     logger.warning(
                         f"Cannot delete message {message_id} in chat {chat_id} - insufficient permissions"
@@ -250,6 +306,35 @@ class AntiEditManager:
 
 # Initialize manager
 anti_edit_manager = AntiEditManager()
+
+
+# ==================== MESSAGE CREATE HANDLER (cache new messages) ====================
+@app.on_message(
+    filters.group & ~filters.bot & ~filters.service & ~filters.edited
+)
+async def cache_new_message(client: Client, message: Message):
+    """
+    Cache message content when a new message is posted. This allows us to compare
+    original content to edited content and detect reaction/metadata-only updates.
+    """
+    try:
+        key = f"{message.chat.id}:{message.id}"
+        # Normalize content (text/caption/media marker)
+        if message.text:
+            content = f"text:{message.text}"
+        elif message.caption:
+            content = f"caption:{message.caption}"
+        elif message.media:
+            try:
+                mt = message.media.value
+            except Exception:
+                mt = str(type(message.media))
+            content = f"media:{mt}"
+        else:
+            content = "empty"
+        message_cache[key] = content
+    except Exception as e:
+        logger.debug(f"Failed to cache message {message.id} in chat {message.chat.id}: {e}")
 
 
 # ==================== MESSAGE EDIT HANDLER ====================
