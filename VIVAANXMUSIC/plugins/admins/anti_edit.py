@@ -4,22 +4,18 @@ Deletes only actually edited messages with a warning.
 Pro Upgraded for VivaanXMusic4.0
 
 Features:
-- Detects edits (text/caption changes only, NOT replies/quotes/reactions/forwards)
-- Sends warning, auto-deletes after countdown
-- Easy /edit enable and /edit disable commands
-- Configurable per group
-- Owner and admin controls
+- Detects only real edits (not replies, not forwards, not reactions)
+- Sends warning and deletes message after the delay
+- /edit enable /edit disable: for group admins/owners only, works in all group types
+- Strict, reliable admin check logic compatible with Telegram's real systems
 """
 
 import asyncio
 import logging
 from typing import Optional, Dict
 from pyrogram import Client, filters
-from pyrogram.types import Message
-from pyrogram.errors import (
-    MessageDeleteForbidden,
-    UserNotParticipant
-)
+from pyrogram.types import Message, ChatPrivileges
+from pyrogram.errors import MessageDeleteForbidden, UserNotParticipant
 from config import OWNER_ID, EDIT_DELETE_TIME, EDIT_WARNING_MESSAGE
 
 from VIVAANXMUSIC import app
@@ -38,11 +34,19 @@ class AntiEditManager:
     async def is_admin_or_owner(self, client: Client, chat_id: int, user_id: int) -> bool:
         try:
             member = await client.get_chat_member(chat_id, user_id)
-            return member.status in ["administrator", "creator"]
+            # Admin in normal group, or promoted admin, or "creator" (group owner)
+            if member.status in ["administrator", "creator"]:
+                return True
+            # In Telegram, sometimes creator is returned as "administrator"
+            # and sometimes custom, so to be extra sure, check "can_manage_chat"
+            if hasattr(member, "privileges") and isinstance(member.privileges, ChatPrivileges):
+                if member.privileges.can_manage_chat:
+                    return True
+            return False
         except UserNotParticipant:
             return False
         except Exception as e:
-            logger.error(f"[AntiEdit] Error checking admin/owner: {e}")
+            logger.error(f"[AntiEdit] Error checking admin status: {e}")
             return False
 
     async def should_detect_edit(self, client: Client, chat_id: int, user_id: int) -> bool:
@@ -122,12 +126,12 @@ anti_edit_manager = AntiEditManager()
 
 def real_edit(message: Message) -> bool:
     """
-    Returns True if this edited message should be subjected to anti-edit logic.
-    Applies only to changes of text/caption, NOT replies, reactions, quotes, forwards, etc.
+    Returns True if this is a real editable message.
+    Only for text/caption edits, not replies, forwards, reactions, etc.
     """
     if not message or not message.from_user:
         return False
-    # Only act on text or caption being changed
+    # Only handle text or caption edits, not service/forward/etc
     has_content = bool(message.text or message.caption)
     is_reply = hasattr(message, "reply_to_message") and message.reply_to_message is not None
     is_service = getattr(message, "service", False)
@@ -162,8 +166,8 @@ async def edit_toggle_command(client: Client, message: Message):
     /edit disable - Disables anti-edit detection
     Only group owner/admins can use
     """
-    user = await client.get_chat_member(message.chat.id, message.from_user.id)
-    if user.status not in ["administrator", "creator"]:
+    is_admin = await anti_edit_manager.is_admin_or_owner(client, message.chat.id, message.from_user.id)
+    if not is_admin:
         return await message.reply_text("❌ **Admin only**")
     if not edit_tracker_db:
         return await message.reply_text("❌ **Database not initialized**")
@@ -175,17 +179,17 @@ async def edit_toggle_command(client: Client, message: Message):
     command = parts[1].lower()
     if command == "enable":
         await edit_tracker_db.toggle_enabled(message.chat.id, True)
-        await message.reply_text("✅ **Anti-edit detection enabled**. Edited messages will be deleted.")
+        await message.reply_text("✅ **Anti-edit detection enabled**.\nEdited messages will be deleted.")
     elif command == "disable":
         await edit_tracker_db.toggle_enabled(message.chat.id, False)
-        await message.reply_text("❌ **Anti-edit detection disabled**. Edited messages will NOT be deleted.")
+        await message.reply_text("❌ **Anti-edit detection disabled**.\nEdited messages will NOT be deleted.")
     else:
         await message.reply_text("Usage: `/edit enable` or `/edit disable`")
 
 @app.on_message(filters.command("antiedit") & filters.group)
 async def antiedit_command(client: Client, message: Message):
-    user = await client.get_chat_member(message.chat.id, message.from_user.id)
-    if user.status not in ["administrator", "creator"]:
+    is_admin = await anti_edit_manager.is_admin_or_owner(client, message.chat.id, message.from_user.id)
+    if not is_admin:
         return await message.reply_text("❌ **Admin only**")
     if not edit_tracker_db:
         return await message.reply_text("❌ **Database not initialized**")
@@ -239,8 +243,8 @@ async def antiedit_command(client: Client, message: Message):
 
 @app.on_message(filters.command("antiedit_stats") & filters.group)
 async def antiedit_stats_command(client: Client, message: Message):
-    user = await client.get_chat_member(message.chat.id, message.from_user.id)
-    if user.status not in ["administrator", "creator"]:
+    is_admin = await anti_edit_manager.is_admin_or_owner(client, message.chat.id, message.from_user.id)
+    if not is_admin:
         return await message.reply_text("❌ **Admin only**")
     if not edit_tracker_db:
         return await message.reply_text("❌ **Database not initialized**")
