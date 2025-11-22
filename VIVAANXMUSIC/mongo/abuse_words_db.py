@@ -56,10 +56,15 @@ class AbuseWordsDB:
             await self.abuse_history_collection.create_index("chat_id")
             await self.abuse_history_collection.create_index("user_id")
             await self.abuse_history_collection.create_index("timestamp")
-            await self.abuse_history_collection.create_index(
-                "timestamp",
-                expireAfterSeconds=604800  # Auto-delete after 7 days
-            )
+            
+            # Try to create TTL index, ignore if it already exists with different options
+            try:
+                await self.abuse_history_collection.create_index(
+                    "timestamp",
+                    expireAfterSeconds=604800  # Auto-delete after 7 days
+                )
+            except Exception as idx_err:
+                logger.warning(f"[AbuseWordsDB] TTL index already exists or error: {idx_err}")
             
             logger.info("[AbuseWordsDB] Indexes created successfully")
         except Exception as e:
@@ -83,20 +88,19 @@ class AbuseWordsDB:
             config = await self.abuse_config_collection.find_one({"chat_id": chat_id})
             
             if config:
-                # Remove MongoDB _id from response
                 config.pop("_id", None)
                 return config
             
-            # Return default config if not found
             return {
                 "chat_id": chat_id,
                 "enabled": True,
                 "strict_mode": False,
-                "warning_limit": 3,  # 0 = unlimited
-                "action": "delete_only",  # mute, ban, delete_only, warn_only
-                "mute_duration": 1440,  # minutes (24 hours)
+                "warning_limit": 3,
+                "action": "delete_only",
+                "mute_duration": 1440,
                 "delete_warning": True,
-                "warning_delete_time": 10,  # seconds
+                "warning_delete_time": 10,
+                "exclude_admins": True,
                 "notify_admins": False,
                 "log_channel": None,
                 "created_at": datetime.now(),
@@ -104,7 +108,12 @@ class AbuseWordsDB:
             }
         except Exception as e:
             logger.error(f"[AbuseWordsDB] Error getting config for {chat_id}: {e}")
-            return {}
+            return {
+                "chat_id": chat_id,
+                "enabled": True,
+                "strict_mode": False,
+                "exclude_admins": True
+            }
     
     async def set_config(self, chat_id: int, config: Dict[str, Any]) -> bool:
         """
@@ -256,7 +265,6 @@ class AbuseWordsDB:
                 logger.warning("[AbuseWordsDB] Empty word provided")
                 return False
             
-            # Check if word already exists
             existing = await self.abuse_words_collection.find_one({"word": word_lower})
             if existing:
                 logger.warning(f"[AbuseWordsDB] Word already exists: {word_lower}")
@@ -313,7 +321,6 @@ class AbuseWordsDB:
         try:
             words = await self.abuse_words_collection.find({}).to_list(length=None)
             
-            # Remove MongoDB _id field
             for word in words:
                 word.pop("_id", None)
             
@@ -365,7 +372,6 @@ class AbuseWordsDB:
             int: Total warning count for user
         """
         try:
-            # Get current warnings
             user_warns = await self.user_warnings_collection.find_one({
                 "chat_id": chat_id,
                 "user_id": user_id
@@ -378,12 +384,10 @@ class AbuseWordsDB:
             }
             
             if user_warns:
-                # Update existing
                 warnings = user_warns.get("warnings", 0) + 1
                 offenses = user_warns.get("offenses", [])
                 offenses.append(offense)
                 
-                # Keep only last 10 offenses
                 if len(offenses) > 10:
                     offenses = offenses[-10:]
                 
@@ -398,7 +402,6 @@ class AbuseWordsDB:
                     }
                 )
             else:
-                # Create new warning document
                 warnings = 1
                 await self.user_warnings_collection.insert_one({
                     "chat_id": chat_id,
@@ -463,6 +466,19 @@ class AbuseWordsDB:
         except Exception as e:
             logger.error(f"[AbuseWordsDB] Error clearing warnings: {e}")
             return False
+    
+    async def clear_user_warnings(self, chat_id: int, user_id: int) -> bool:
+        """
+        Clear warnings for a specific user (alias for clear_warnings)
+        
+        Args:
+            chat_id: Telegram group ID
+            user_id: User ID
+            
+        Returns:
+            bool: True if successful
+        """
+        return await self.clear_warnings(chat_id, user_id)
     
     async def get_user_history(self, chat_id: int, user_id: int) -> Dict[str, Any]:
         """
@@ -580,7 +596,6 @@ class AbuseWordsDB:
                 "chat_id": chat_id
             })
             
-            # Get most common violations
             pipeline = [
                 {"$match": {"chat_id": chat_id}},
                 {"$group": {"_id": "$detected_word", "count": {"$sum": 1}}},
@@ -601,7 +616,11 @@ class AbuseWordsDB:
             }
         except Exception as e:
             logger.error(f"[AbuseWordsDB] Error getting stats: {e}")
-            return {}
+            return {
+                "total_abuse_words": 0,
+                "total_violations": 0,
+                "users_with_warnings": 0
+            }
     
     # ────────────────────────────────────────────────────────────
     # Cleanup & Maintenance
