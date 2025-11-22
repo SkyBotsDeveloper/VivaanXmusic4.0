@@ -19,7 +19,7 @@ Commands:
 
 import asyncio
 import logging
-from typing import Optional, Dict, Set
+from typing import Optional, Dict, Set, Tuple
 from datetime import datetime
 
 from pyrogram import Client, filters
@@ -60,6 +60,7 @@ WARNING_MESSAGE = (
 
 # In-memory cache for admin status (reduces API calls)
 admin_cache: Dict[int, Dict[int, bool]] = {}
+message_content_cache: Dict[str, Tuple[str, int]] = {}  # Store original message content
 cache_expiry = 300  # 5 minutes
 
 
@@ -105,10 +106,27 @@ class AntiEditManager:
             logger.warning(f"Error checking admin status for user {user_id} in chat {chat_id}: {e}")
             return False
     
+    def get_message_content_hash(self, message: Message) -> Optional[str]:
+        """
+        Generate a hash of message content to detect real edits.
+        """
+        content_parts = []
+        
+        if message.text:
+            content_parts.append(f"text:{message.text}")
+        if message.caption:
+            content_parts.append(f"caption:{message.caption}")
+        if message.media:
+            content_parts.append(f"media:{message.media}")
+        
+        if not content_parts:
+            return None
+        
+        return "|".join(content_parts)
+    
     def is_reaction_update(self, message: Message) -> bool:
         """
         Check if the update is just an emoji reaction (not a text edit).
-        Telegram reactions don't trigger actual message edits in text content.
         
         Args:
             message: The edited message object
@@ -116,17 +134,35 @@ class AntiEditManager:
         Returns:
             bool: True if it's a reaction, False if it's a real edit
         """
-        # If message has no text/caption and no media change, it's likely just metadata
-        # Real edits will have text or caption
-        if not message.text and not message.caption:
+        chat_id = message.chat.id
+        message_id = message.id
+        msg_key = f"{chat_id}:{message_id}"
+        
+        # Get current content hash
+        current_hash = self.get_message_content_hash(message)
+        
+        # If no content, it's not a real edit
+        if current_hash is None:
             return True
         
-        # If the edit date and message date are very close (< 1 second), 
-        # it might be a reaction or other metadata update
-        if message.edit_date and message.date:
-            time_diff = abs((message.edit_date - message.date).total_seconds())
-            if time_diff < 1:
+        # Check if we have the original content cached
+        if msg_key in message_content_cache:
+            previous_hash, _ = message_content_cache[msg_key]
+            
+            # If content hasn't changed, it's just a reaction
+            if current_hash == previous_hash:
+                logger.debug(f"Reaction detected (no content change) in {msg_key}")
                 return True
+            else:
+                # Content changed - real edit
+                logger.debug(f"Real edit detected (content changed) in {msg_key}")
+                message_content_cache[msg_key] = (current_hash, int(datetime.utcnow().timestamp()))
+                return False
+        else:
+            # First time seeing this message, cache it
+            message_content_cache[msg_key] = (current_hash, int(datetime.utcnow().timestamp()))
+            # Since we don't have previous content, assume it's not an edit
+            return True
         
         return False
     
@@ -250,6 +286,31 @@ class AntiEditManager:
 
 # Initialize manager
 anti_edit_manager = AntiEditManager()
+
+
+# ==================== CACHE ORIGINAL MESSAGES ====================
+
+@app.on_message(
+    filters.group & ~filters.bot & ~filters.service & (filters.text | filters.caption)
+)
+async def cache_message_content(client: Client, message: Message):
+    """
+    Cache original message content for edit detection.
+    This is CRITICAL for distinguishing reactions from edits.
+    """
+    try:
+        chat_id = message.chat.id
+        message_id = message.id
+        msg_key = f"{chat_id}:{message_id}"
+        
+        # Get and store content hash
+        content_hash = anti_edit_manager.get_message_content_hash(message)
+        if content_hash:
+            message_content_cache[msg_key] = (content_hash, int(datetime.utcnow().timestamp()))
+            logger.debug(f"Cached content for message {msg_key}")
+            
+    except Exception as e:
+        logger.debug(f"Error caching message content: {e}")
 
 
 # ==================== MESSAGE EDIT HANDLER ====================
@@ -484,16 +545,29 @@ async def manage_authorized_users(client: Client, message: Message):
 
 # ==================== CACHE CLEANUP ====================
 
-async def clear_admin_cache_periodically():
-    """Clear admin cache every 5 minutes to ensure fresh data."""
+async def clear_caches_periodically():
+    """Clear caches periodically to free memory."""
     while True:
         await asyncio.sleep(cache_expiry)
+        
+        # Clear admin cache
         admin_cache.clear()
-        logger.debug("Admin cache cleared")
+        
+        # Clear old message content cache (older than 24 hours)
+        current_time = int(datetime.utcnow().timestamp())
+        expired_keys = [
+            key for key, (_, timestamp) in message_content_cache.items()
+            if current_time - timestamp > 86400  # 24 hours
+        ]
+        
+        for key in expired_keys:
+            message_content_cache.pop(key, None)
+        
+        logger.debug(f"Cache cleared: {len(expired_keys)} expired messages removed")
 
 
 # Start cache cleanup task
-asyncio.create_task(clear_admin_cache_periodically())
+asyncio.create_task(clear_caches_periodically())
 
 
 logger.info("Anti-Edit plugin loaded successfully with 1-minute warning system")
