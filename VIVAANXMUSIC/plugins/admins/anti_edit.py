@@ -15,7 +15,6 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 class AntiEditManager:
-    # edit_exempt_users is a dict mapping chat_id to set of exempt user_ids
     edit_exempt_users: Dict[int, Set[int]] = {}
 
     def __init__(self):
@@ -36,7 +35,6 @@ class AntiEditManager:
         config = await edit_tracker_db.get_config(chat_id)
         if not config.get("enabled", True):
             return False
-        # Exempt if in per-group-authorized set
         exempt = AntiEditManager.edit_exempt_users.get(chat_id, set())
         if user_id in exempt:
             return False
@@ -92,20 +90,38 @@ class AntiEditManager:
 anti_edit_manager = AntiEditManager()
 
 def is_real_edit(message: Message) -> bool:
+    """
+    Returns True only for real text/caption edits by a human, not for:
+    - reactions (emoji add/remove)
+    - bot replies
+    - system/service/forward/media/album/game edits
+    """
     if not message or not message.from_user:
         return False
-    has_content = bool(message.text or message.caption)
-    is_service = getattr(message, "service", False)
-    is_reply = getattr(message, "reply_to_message", None)
-    is_forward = getattr(message, "forward_from", None) or getattr(message, "forward_from_chat", None)
-    is_via_bot = getattr(message, "via_bot", None)
-    is_media = getattr(message, "media_group_id", None) or message.document or message.photo or message.audio or message.video
-    is_game = message.game if hasattr(message, 'game') else False
-    # If editing a bot message, is_bot is True
-    is_bot_edit = message.from_user.is_bot
-    if (not has_content or is_service or is_reply or is_forward or is_via_bot
-        or is_media or is_game or is_bot_edit):
+    # Reactions/emoji edits: no change in text/caption, only edit_date changes
+    original_text, original_caption = getattr(message, "text", None), getattr(message, "caption", None)
+    if not (original_text or original_caption):
         return False
+    # Service/system/bot/media/game/etc
+    if (
+        getattr(message, "service", False)
+        or getattr(message, "reply_to_message", None)
+        or getattr(message, "forward_from", None)
+        or getattr(message, "forward_from_chat", None)
+        or getattr(message, "via_bot", None)
+        or getattr(message, "media_group_id", None)
+        or getattr(message, "document", None)
+        or getattr(message, "photo", None)
+        or getattr(message, "audio", None)
+        or getattr(message, "video", None)
+        or getattr(message, "game", None)
+        or message.from_user.is_bot
+        or (hasattr(message, "new_chat_members") and message.new_chat_members)
+        or (hasattr(message, "left_chat_member") and message.left_chat_member)
+        or (hasattr(message, "pinned_message") and message.pinned_message)
+    ):
+        return False
+    # If only text/caption and from human: allow through for checking
     return True
 
 @app.on_edited_message(filters.group)
@@ -127,32 +143,28 @@ async def handle_edited_message(client: Client, message: Message):
 
 @app.on_message(filters.command("editauth") & filters.group)
 async def editauth_command(client: Client, message: Message):
-    """Reply with /editauth to bypass anti-edit for a user."""
     if not (await anti_edit_manager.is_admin_or_owner(message.chat.id, message.from_user.id)):
         return await message.reply_text("❌ **Admin only**", quote=True)
     if not message.reply_to_message or not message.reply_to_message.from_user:
-        return await message.reply_text("❌ **Reply to a user's message**")
+        return await message.reply_text("❌ **Reply to user's message**")
     chat_id = message.chat.id
     target_user = message.reply_to_message.from_user.id
-    # Add to exempt list for this group
     AntiEditManager.edit_exempt_users.setdefault(chat_id, set()).add(target_user)
-    await message.reply_text("✅ User is now authorized to edit messages in this group and will no longer be deleted.")
+    await message.reply_text("✅ User is now allowed to edit messages in this group (immune to anti-edit locks).")
 
 @app.on_message(filters.command(["deleditauth", "editauthremove", "editauthdel"]) & filters.group)
 async def editauth_remove_command(client: Client, message: Message):
-    """Remove anti-edit bypass (reply to user)."""
     if not (await anti_edit_manager.is_admin_or_owner(message.chat.id, message.from_user.id)):
         return await message.reply_text("❌ **Admin only**", quote=True)
     if not message.reply_to_message or not message.reply_to_message.from_user:
-        return await message.reply_text("❌ **Reply to a user's message**")
+        return await message.reply_text("❌ **Reply to user's message**")
     chat_id = message.chat.id
     target_user = message.reply_to_message.from_user.id
     AntiEditManager.edit_exempt_users.setdefault(chat_id, set()).discard(target_user)
-    await message.reply_text("❎ User is no longer authorized to edit in this group.")
+    await message.reply_text("❎ User is no longer bypassing anti-edit.")
 
 @app.on_message(filters.command("editauthlist") & filters.group)
 async def editauth_list_command(client: Client, message: Message):
-    """Show all edit-authorized users in the current group."""
     if not (await anti_edit_manager.is_admin_or_owner(message.chat.id, message.from_user.id)):
         return await message.reply_text("❌ **Admin only**", quote=True)
     chat_id = message.chat.id
