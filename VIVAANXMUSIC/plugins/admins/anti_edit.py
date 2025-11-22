@@ -3,6 +3,13 @@ Anti-Edit Plugin for VivaanXMusic Bot
 Detects and deletes edited messages in groups with warnings.
 Only authorized users can edit messages without deletion.
 
+Features:
+- Ignores emoji reactions (Telegram's reaction feature)
+- 1-minute warning before deletion
+- Works on messages edited at any time (even hours later)
+- Only deletes the edited message (not replies)
+- Proper authorization system
+
 Commands:
 - /antiedit on/off: Enable/disable anti-edit (Admin/Owner only)
 - /authedit: Authorize user to edit (reply to user, Admin/Owner only)
@@ -16,7 +23,7 @@ from typing import Optional, Dict, Set
 from datetime import datetime
 
 from pyrogram import Client, filters
-from pyrogram.types import Message, ChatMemberUpdated
+from pyrogram.types import Message
 from pyrogram.errors import (
     MessageDeleteForbidden,
     UserNotParticipant,
@@ -24,7 +31,7 @@ from pyrogram.errors import (
     FloodWait,
     RPCError
 )
-from pyrogram.enums import ChatMemberStatus
+from pyrogram.enums import ChatMemberStatus, MessageMediaType
 
 from config import OWNER_ID
 from VIVAANXMUSIC import app
@@ -43,8 +50,13 @@ from VIVAANXMUSIC.mongo.edit_tracker_db import (
 logger = logging.getLogger(__name__)
 
 # Configuration
-EDIT_DELETE_TIME = 3  # Seconds to wait before deleting edited message
-WARNING_MESSAGE = "⚠️ **Edited Message Detected!**\n\n❌ Message editing is not allowed in this group.\n\n🔒 Your edited message will be deleted."
+EDIT_WARNING_TIME = 60  # Wait 60 seconds (1 minute) before deleting
+WARNING_MESSAGE = (
+    "⚠️ **Edited Message Detected!**\n\n"
+    "❌ Message editing is not allowed in this group.\n\n"
+    "⏱️ Your edited message will be deleted in **1 minute**.\n\n"
+    "💡 Contact admins if you need edit permission."
+)
 
 # In-memory cache for admin status (reduces API calls)
 admin_cache: Dict[int, Dict[int, bool]] = {}
@@ -55,7 +67,7 @@ class AntiEditManager:
     """Manages anti-edit functionality across all groups."""
     
     def __init__(self):
-        self.pending_tasks: Dict[str, asyncio.Task] = {}
+        self.pending_deletions: Dict[str, asyncio.Task] = {}
         self.processing_edits: Set[str] = set()
     
     async def is_admin_or_owner(self, chat_id: int, user_id: int) -> bool:
@@ -93,6 +105,31 @@ class AntiEditManager:
             logger.warning(f"Error checking admin status for user {user_id} in chat {chat_id}: {e}")
             return False
     
+    def is_reaction_update(self, message: Message) -> bool:
+        """
+        Check if the update is just an emoji reaction (not a text edit).
+        Telegram reactions don't trigger actual message edits in text content.
+        
+        Args:
+            message: The edited message object
+            
+        Returns:
+            bool: True if it's a reaction, False if it's a real edit
+        """
+        # If message has no text/caption and no media change, it's likely just metadata
+        # Real edits will have text or caption
+        if not message.text and not message.caption:
+            return True
+        
+        # If the edit date and message date are very close (< 1 second), 
+        # it might be a reaction or other metadata update
+        if message.edit_date and message.date:
+            time_diff = abs((message.edit_date - message.date).total_seconds())
+            if time_diff < 1:
+                return True
+        
+        return False
+    
     async def should_delete_edit(self, chat_id: int, user_id: int) -> bool:
         """
         Determine if an edited message should be deleted.
@@ -122,7 +159,7 @@ class AntiEditManager:
     
     async def handle_edited_message(self, client: Client, message: Message):
         """
-        Handle edited message detection and deletion.
+        Handle edited message detection and deletion with 1-minute warning.
         
         Args:
             client: Pyrogram client
@@ -134,6 +171,11 @@ class AntiEditManager:
         
         # Skip if no user (service messages, etc.)
         if not user_id:
+            return
+        
+        # Skip if it's just a reaction or metadata update (not actual text edit)
+        if self.is_reaction_update(message):
+            logger.debug(f"Skipping reaction/metadata update in chat {chat_id}")
             return
         
         # Create unique identifier for this edit
@@ -151,40 +193,50 @@ class AntiEditManager:
                 return
             
             # Send warning message
+            warning_msg = None
             try:
                 warning_msg = await message.reply_text(
                     WARNING_MESSAGE,
                     quote=True
                 )
                 
-                # Log the action to database
-                await log_edit_action(
-                    chat_id=chat_id,
-                    user_id=user_id,
-                    message_id=message_id,
-                    action="deleted",
-                    timestamp=datetime.utcnow()
+                logger.info(
+                    f"Edit detected: User {user_id} edited message {message_id} in chat {chat_id}. "
+                    f"Warning sent, deletion in {EDIT_WARNING_TIME} seconds."
                 )
                 
-                # Wait configured time before deletion
-                await asyncio.sleep(EDIT_DELETE_TIME)
+                # Wait 1 minute before deletion
+                await asyncio.sleep(EDIT_WARNING_TIME)
                 
-                # Delete the edited message
+                # Delete the edited message ONLY (not the warning or any replies)
                 try:
                     await message.delete()
                     logger.info(f"Deleted edited message {message_id} from user {user_id} in chat {chat_id}")
+                    
+                    # Log the action to database
+                    await log_edit_action(
+                        chat_id=chat_id,
+                        user_id=user_id,
+                        message_id=message_id,
+                        action="deleted",
+                        timestamp=datetime.utcnow()
+                    )
+                    
                 except MessageDeleteForbidden:
-                    logger.warning(f"Cannot delete message {message_id} in chat {chat_id} - insufficient permissions")
+                    logger.warning(
+                        f"Cannot delete message {message_id} in chat {chat_id} - insufficient permissions"
+                    )
                 except Exception as e:
                     logger.error(f"Error deleting message {message_id}: {e}")
                 
-                # Delete warning message after a delay
-                await asyncio.sleep(2)
-                try:
-                    await warning_msg.delete()
-                except Exception as e:
-                    logger.debug(f"Could not delete warning message: {e}")
-                    
+                # Delete warning message after deletion
+                if warning_msg:
+                    await asyncio.sleep(3)
+                    try:
+                        await warning_msg.delete()
+                    except Exception as e:
+                        logger.debug(f"Could not delete warning message: {e}")
+                        
             except FloodWait as e:
                 logger.warning(f"FloodWait: Sleeping for {e.value} seconds")
                 await asyncio.sleep(e.value)
@@ -209,6 +261,11 @@ async def on_message_edited(client: Client, message: Message):
     """
     Handler for all edited messages in groups.
     Triggers anti-edit check and deletion if needed.
+    
+    Note: This handler ignores:
+    - Bot messages
+    - Service messages (user joined, etc.)
+    - Emoji reactions (detected via is_reaction_update)
     """
     try:
         await anti_edit_manager.handle_edited_message(client, message)
@@ -247,7 +304,10 @@ async def toggle_antiedit(client: Client, message: Message):
             f"**Anti-Edit Status:** {current_status}\n\n"
             "**Usage:**\n"
             "• `/antiedit on` - Enable anti-edit\n"
-            "• `/antiedit off` - Disable anti-edit"
+            "• `/antiedit off` - Disable anti-edit\n\n"
+            "**Info:**\n"
+            "⏱️ Warning time: 1 minute before deletion\n"
+            "🔒 Authorized users can edit freely"
         )
         return
     
@@ -257,7 +317,8 @@ async def toggle_antiedit(client: Client, message: Message):
         await enable_antiedit(chat_id)
         await message.reply_text(
             "✅ **Anti-Edit Enabled**\n\n"
-            "All edited messages will be deleted unless the user is authorized with `/authedit`.\n\n"
+            "All edited messages will be deleted after a 1-minute warning, "
+            "unless the user is authorized with `/authedit`.\n\n"
             "💡 **Tip:** Use `/authedit` (reply to user) to authorize someone to edit messages."
         )
         logger.info(f"Anti-edit enabled in chat {chat_id} by user {user_id}")
@@ -303,8 +364,8 @@ async def manage_authorized_users(client: Client, message: Message):
         return
     
     # Parse command
-    args = message.text.split(maxsplit=1)
-    action = args[1].lower() if len(args) > 1 else "add"
+    command_parts = message.text.split(maxsplit=1)
+    action = command_parts[1].lower() if len(command_parts) > 1 else "add"
     
     # Handle "list" action
     if action == "list":
@@ -320,18 +381,18 @@ async def manage_authorized_users(client: Client, message: Message):
         
         # Format user list
         user_list = []
-        for auth_user_id in authorized:
+        for idx, auth_user_id in enumerate(authorized, 1):
             try:
                 user = await client.get_users(auth_user_id)
                 name = user.first_name + (f" {user.last_name}" if user.last_name else "")
                 username = f"@{user.username}" if user.username else ""
-                user_list.append(f"• {name} {username} (`{auth_user_id}`)")
+                user_list.append(f"{idx}. {name} {username}\n   └ ID: `{auth_user_id}`")
             except Exception:
-                user_list.append(f"• User ID: `{auth_user_id}`")
+                user_list.append(f"{idx}. User ID: `{auth_user_id}`")
         
         await message.reply_text(
             f"📋 **Authorized Users** ({len(authorized)})\n\n"
-            + "\n".join(user_list) +
+            + "\n\n".join(user_list) +
             "\n\n✅ These users can edit messages without deletion."
         )
         return
@@ -340,64 +401,83 @@ async def manage_authorized_users(client: Client, message: Message):
     if not message.reply_to_message:
         await message.reply_text(
             "⚠️ **Reply Required**\n\n"
-            "Reply to a user's message with:\n"
-            "• `/authedit` - To authorize them\n"
-            "• `/authedit remove` - To remove authorization\n"
-            "• `/authedit list` - To see all authorized users"
+            "**How to use:**\n"
+            "• Reply to a user's message with `/authedit` - To authorize them\n"
+            "• Reply to a user's message with `/authedit remove` - To remove authorization\n"
+            "• Use `/authedit list` - To see all authorized users"
         )
         return
     
     target_user = message.reply_to_message.from_user
     if not target_user:
-        await message.reply_text("❌ Cannot identify the user.")
+        await message.reply_text("❌ Cannot identify the user from the replied message.")
         return
     
     target_user_id = target_user.id
     target_name = target_user.first_name + (f" {target_user.last_name}" if target_user.last_name else "")
     target_mention = target_user.mention
     
-    # Handle "add" action
-    if action == "add":
+    # Handle "add" action (default when just /authedit)
+    if action == "add" or action not in ["remove", "list"]:
         # Check if already authorized
         if await is_authorized_user(chat_id, target_user_id):
             await message.reply_text(
-                f"ℹ️ {target_mention} is already authorized to edit messages."
+                f"ℹ️ **Already Authorized**\n\n"
+                f"{target_mention} is already authorized to edit messages.\n\n"
+                f"Use `/authedit remove` (reply to user) to remove authorization."
             )
             return
         
         # Add authorization
-        await add_authorized_user(chat_id, target_user_id)
-        await message.reply_text(
-            f"✅ **Authorization Granted**\n\n"
-            f"{target_mention} can now edit messages without deletion.\n\n"
-            f"🔓 User ID: `{target_user_id}`"
-        )
-        logger.info(f"User {target_user_id} authorized in chat {chat_id} by {user_id}")
+        success = await add_authorized_user(chat_id, target_user_id)
+        
+        if success:
+            await message.reply_text(
+                f"✅ **Authorization Granted**\n\n"
+                f"**User:** {target_mention}\n"
+                f"**ID:** `{target_user_id}`\n\n"
+                f"🔓 This user can now edit messages without deletion."
+            )
+            logger.info(f"User {target_user_id} authorized in chat {chat_id} by admin {user_id}")
+        else:
+            await message.reply_text(
+                "❌ **Error**\n\n"
+                "Failed to authorize user. Please try again."
+            )
     
     # Handle "remove" action
     elif action == "remove":
         # Check if user is authorized
         if not await is_authorized_user(chat_id, target_user_id):
             await message.reply_text(
-                f"ℹ️ {target_mention} is not in the authorized list."
+                f"ℹ️ **Not Authorized**\n\n"
+                f"{target_mention} is not in the authorized list."
             )
             return
         
         # Remove authorization
-        await remove_authorized_user(chat_id, target_user_id)
-        await message.reply_text(
-            f"❌ **Authorization Removed**\n\n"
-            f"{target_mention} can no longer edit messages without deletion.\n\n"
-            f"🔒 User ID: `{target_user_id}`"
-        )
-        logger.info(f"User {target_user_id} deauthorized in chat {chat_id} by {user_id}")
+        success = await remove_authorized_user(chat_id, target_user_id)
+        
+        if success:
+            await message.reply_text(
+                f"❌ **Authorization Removed**\n\n"
+                f"**User:** {target_mention}\n"
+                f"**ID:** `{target_user_id}`\n\n"
+                f"🔒 This user's edits will now be deleted after warning."
+            )
+            logger.info(f"User {target_user_id} deauthorized in chat {chat_id} by admin {user_id}")
+        else:
+            await message.reply_text(
+                "❌ **Error**\n\n"
+                "Failed to remove authorization. Please try again."
+            )
     
     else:
         await message.reply_text(
             "⚠️ **Invalid Action**\n\n"
-            "Valid options:\n"
-            "• `/authedit` - Authorize user\n"
-            "• `/authedit remove` - Remove authorization\n"
+            "Valid commands:\n"
+            "• `/authedit` (reply) - Authorize user\n"
+            "• `/authedit remove` (reply) - Remove authorization\n"
             "• `/authedit list` - List authorized users"
         )
 
@@ -416,4 +496,4 @@ async def clear_admin_cache_periodically():
 asyncio.create_task(clear_admin_cache_periodically())
 
 
-logger.info("Anti-Edit plugin loaded successfully")
+logger.info("Anti-Edit plugin loaded successfully with 1-minute warning system")
