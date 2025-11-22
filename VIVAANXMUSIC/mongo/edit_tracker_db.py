@@ -1,488 +1,577 @@
 """
-Edit Tracker Database Module
-Manages edited message detection and scheduled deletion
-Part of VivaanXMusic4.0 Anti-Edit System
+Edit Tracker Database Module for VivaanXMusic Bot
+Handles MongoDB operations for anti-edit functionality.
 
-Functions:
-- Store edit detection configurations per group
-- Track pending message deletions
-- Manage admin exemptions
-- Handle deletion scheduling
+Collections:
+- antiedit_config: Stores enable/disable status per group
+- authorized_users: Stores users authorized to edit per group
+- edit_logs: Logs all edit actions for analytics
+
+Author: Vivaan Devs
+Version: 4.0
 """
 
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
 import logging
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
-from pymongo import ASCENDING, DESCENDING
+from typing import Optional, List, Dict, Any
+from datetime import datetime, timedelta
 
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
+from pymongo.errors import PyMongoError, DuplicateKeyError
+
+from config import MONGO_DB_URI
+
+# Logger setup
 logger = logging.getLogger(__name__)
 
 
 class EditTrackerDB:
-    """MongoDB database handler for edit message tracking"""
+    """
+    MongoDB handler for anti-edit functionality.
+    Manages configuration, authorized users, and edit logs.
+    """
     
-    def __init__(self, mongo_db: AsyncIOMotorDatabase):
-        """
-        Initialize EditTrackerDB
-        
-        Args:
-            mongo_db: Motor AsyncIO MongoDB database instance
-        """
-        self.db = mongo_db
-        self.edit_config_collection: AsyncIOMotorCollection = mongo_db["edit_tracker_config"]
-        self.pending_deletions_collection: AsyncIOMotorCollection = mongo_db["pending_edits"]
-        self.edit_history_collection: AsyncIOMotorCollection = mongo_db["edit_history"]
+    def __init__(self):
+        """Initialize MongoDB connection and collections."""
+        try:
+            self.client: AsyncIOMotorClient = AsyncIOMotorClient(MONGO_DB_URI)
+            self.db: AsyncIOMotorDatabase = self.client.VivaanXMusic
+            
+            # Collections
+            self.config_collection: AsyncIOMotorCollection = self.db.antiedit_config
+            self.authorized_collection: AsyncIOMotorCollection = self.db.authorized_users
+            self.logs_collection: AsyncIOMotorCollection = self.db.edit_logs
+            
+            logger.info("EditTrackerDB initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize EditTrackerDB: {e}", exc_info=True)
+            raise
     
     async def create_indexes(self):
-        """Create required MongoDB indexes for performance"""
-        try:
-            # Config indexes
-            await self.edit_config_collection.create_index("chat_id", unique=True)
-            
-            # Pending deletions indexes
-            await self.pending_deletions_collection.create_index("chat_id")
-            await self.pending_deletions_collection.create_index("user_id")
-            await self.pending_deletions_collection.create_index("scheduled_at")
-            await self.pending_deletions_collection.create_index(
-                "scheduled_at",
-                expireAfterSeconds=3600  # Auto-delete after 1 hour
-            )
-            
-            # Edit history indexes
-            await self.edit_history_collection.create_index("chat_id")
-            await self.edit_history_collection.create_index("user_id")
-            await self.edit_history_collection.create_index("timestamp", expireAfterSeconds=86400)
-            
-            logger.info("[EditTrackerDB] Indexes created successfully")
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error creating indexes: {e}")
-    
-    # ────────────────────────────────────────────────────────────
-    # Configuration Management
-    # ────────────────────────────────────────────────────────────
-    
-    async def get_config(self, chat_id: int) -> Dict[str, Any]:
         """
-        Get edit detection configuration for a chat
+        Create MongoDB indexes for optimal query performance.
+        Should be called once during bot startup.
+        """
+        try:
+            # Index for config collection
+            await self.config_collection.create_index("chat_id", unique=True)
+            
+            # Compound index for authorized users
+            await self.authorized_collection.create_index(
+                [("chat_id", 1), ("user_id", 1)],
+                unique=True
+            )
+            await self.authorized_collection.create_index("chat_id")
+            
+            # Indexes for logs collection
+            await self.logs_collection.create_index(
+                [("chat_id", 1), ("timestamp", -1)]
+            )
+            await self.logs_collection.create_index("timestamp", expireAfterSeconds=2592000)  # 30 days TTL
+            
+            logger.info("MongoDB indexes created successfully")
+            
+        except Exception as e:
+            logger.error(f"Error creating indexes: {e}", exc_info=True)
+    
+    # ==================== CONFIG OPERATIONS ====================
+    
+    async def enable_antiedit(self, chat_id: int) -> bool:
+        """
+        Enable anti-edit feature for a group.
         
         Args:
-            chat_id: Telegram group ID
+            chat_id: Telegram chat ID
             
         Returns:
-            dict: Configuration dictionary with defaults
+            bool: True if successful, False otherwise
         """
         try:
-            config = await self.edit_config_collection.find_one({"chat_id": chat_id})
+            await self.config_collection.update_one(
+                {"chat_id": chat_id},
+                {
+                    "$set": {
+                        "enabled": True,
+                        "updated_at": datetime.utcnow()
+                    },
+                    "$setOnInsert": {
+                        "chat_id": chat_id,
+                        "created_at": datetime.utcnow()
+                    }
+                },
+                upsert=True
+            )
+            logger.info(f"Anti-edit enabled for chat {chat_id}")
+            return True
             
-            if config:
-                return config
+        except PyMongoError as e:
+            logger.error(f"Error enabling anti-edit for chat {chat_id}: {e}")
+            return False
+    
+    async def disable_antiedit(self, chat_id: int) -> bool:
+        """
+        Disable anti-edit feature for a group.
+        
+        Args:
+            chat_id: Telegram chat ID
             
-            # Return default config if not found
-            return {
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            await self.config_collection.update_one(
+                {"chat_id": chat_id},
+                {
+                    "$set": {
+                        "enabled": False,
+                        "updated_at": datetime.utcnow()
+                    },
+                    "$setOnInsert": {
+                        "chat_id": chat_id,
+                        "created_at": datetime.utcnow()
+                    }
+                },
+                upsert=True
+            )
+            logger.info(f"Anti-edit disabled for chat {chat_id}")
+            return True
+            
+        except PyMongoError as e:
+            logger.error(f"Error disabling anti-edit for chat {chat_id}: {e}")
+            return False
+    
+    async def is_antiedit_enabled(self, chat_id: int) -> bool:
+        """
+        Check if anti-edit is enabled for a group.
+        
+        Args:
+            chat_id: Telegram chat ID
+            
+        Returns:
+            bool: True if enabled, False if disabled or not configured
+        """
+        try:
+            config = await self.config_collection.find_one({"chat_id": chat_id})
+            
+            if config is None:
+                # Default: disabled if not configured
+                return False
+            
+            return config.get("enabled", False)
+            
+        except PyMongoError as e:
+            logger.error(f"Error checking anti-edit status for chat {chat_id}: {e}")
+            return False
+    
+    async def get_config(self, chat_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get full configuration for a group.
+        
+        Args:
+            chat_id: Telegram chat ID
+            
+        Returns:
+            Optional[Dict]: Configuration dict or None if not found
+        """
+        try:
+            config = await self.config_collection.find_one({"chat_id": chat_id})
+            return config
+            
+        except PyMongoError as e:
+            logger.error(f"Error getting config for chat {chat_id}: {e}")
+            return None
+    
+    # ==================== AUTHORIZED USERS OPERATIONS ====================
+    
+    async def add_authorized_user(self, chat_id: int, user_id: int) -> bool:
+        """
+        Add a user to the authorized list for a group.
+        
+        Args:
+            chat_id: Telegram chat ID
+            user_id: Telegram user ID to authorize
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            await self.authorized_collection.insert_one({
                 "chat_id": chat_id,
-                "enabled": True,
-                "warning_time": 60,  # seconds
-                "exclude_admins": True,
-                "exclude_owner": True,
-                "delete_warning_msg": True,
-                "warning_delete_delay": 5,  # seconds
-                "notify_channel": None,
-                "created_at": datetime.now(),
-                "updated_at": datetime.now()
-            }
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error getting config for {chat_id}: {e}")
-            return {}
-    
-    async def set_config(self, chat_id: int, config: Dict[str, Any]) -> bool:
-        """
-        Set or update edit detection configuration
-        
-        Args:
-            chat_id: Telegram group ID
-            config: Configuration dictionary
-            
-        Returns:
-            bool: True if successful
-        """
-        try:
-            config["chat_id"] = chat_id
-            config["updated_at"] = datetime.now()
-            
-            await self.edit_config_collection.update_one(
-                {"chat_id": chat_id},
-                {"$set": config},
-                upsert=True
-            )
-            logger.info(f"[EditTrackerDB] Config updated for chat {chat_id}")
-            return True
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error setting config for {chat_id}: {e}")
-            return False
-    
-    async def toggle_enabled(self, chat_id: int, enabled: bool) -> bool:
-        """
-        Toggle edit detection on/off for a chat
-        
-        Args:
-            chat_id: Telegram group ID
-            enabled: Enable or disable
-            
-        Returns:
-            bool: True if successful
-        """
-        try:
-            await self.edit_config_collection.update_one(
-                {"chat_id": chat_id},
-                {
-                    "$set": {
-                        "enabled": enabled,
-                        "updated_at": datetime.now()
-                    }
-                },
-                upsert=True
-            )
-            logger.info(f"[EditTrackerDB] Edit detection {'enabled' if enabled else 'disabled'} for {chat_id}")
-            return True
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error toggling for {chat_id}: {e}")
-            return False
-    
-    async def set_warning_time(self, chat_id: int, seconds: int) -> bool:
-        """
-        Set warning countdown time before deletion
-        
-        Args:
-            chat_id: Telegram group ID
-            seconds: Countdown time in seconds (min: 10, max: 300)
-            
-        Returns:
-            bool: True if successful
-        """
-        try:
-            # Validate range
-            if not (10 <= seconds <= 300):
-                logger.warning(f"[EditTrackerDB] Invalid warning time: {seconds}. Using default 60s")
-                seconds = 60
-            
-            await self.edit_config_collection.update_one(
-                {"chat_id": chat_id},
-                {
-                    "$set": {
-                        "warning_time": seconds,
-                        "updated_at": datetime.now()
-                    }
-                },
-                upsert=True
-            )
-            logger.info(f"[EditTrackerDB] Warning time set to {seconds}s for {chat_id}")
-            return True
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error setting warning time: {e}")
-            return False
-    
-    async def set_admin_exemption(self, chat_id: int, exempt: bool) -> bool:
-        """
-        Set whether admins are exempt from edit detection
-        
-        Args:
-            chat_id: Telegram group ID
-            exempt: Exempt admins or not
-            
-        Returns:
-            bool: True if successful
-        """
-        try:
-            await self.edit_config_collection.update_one(
-                {"chat_id": chat_id},
-                {
-                    "$set": {
-                        "exclude_admins": exempt,
-                        "updated_at": datetime.now()
-                    }
-                },
-                upsert=True
-            )
-            logger.info(f"[EditTrackerDB] Admin exemption set to {exempt} for {chat_id}")
-            return True
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error setting admin exemption: {e}")
-            return False
-    
-    # ────────────────────────────────────────────────────────────
-    # Pending Deletion Management
-    # ────────────────────────────────────────────────────────────
-    
-    async def add_pending_deletion(
-        self,
-        chat_id: int,
-        message_id: int,
-        user_id: int,
-        warning_msg_id: Optional[int] = None,
-        delete_in_seconds: int = 60
-    ) -> bool:
-        """
-        Add a message to pending deletions queue
-        
-        Args:
-            chat_id: Telegram group ID
-            message_id: Message ID to delete
-            user_id: User who edited the message
-            warning_msg_id: Warning message ID (for cleanup)
-            delete_in_seconds: Seconds until deletion
-            
-        Returns:
-            bool: True if successful
-        """
-        try:
-            scheduled_at = datetime.now() + timedelta(seconds=delete_in_seconds)
-            
-            pending = {
-                "chat_id": chat_id,
-                "message_id": message_id,
                 "user_id": user_id,
-                "warning_msg_id": warning_msg_id,
-                "scheduled_at": scheduled_at,
-                "created_at": datetime.now(),
-                "status": "pending"
-            }
-            
-            await self.pending_deletions_collection.insert_one(pending)
-            logger.info(f"[EditTrackerDB] Pending deletion added: {chat_id}/{message_id}")
+                "authorized_at": datetime.utcnow()
+            })
+            logger.info(f"User {user_id} authorized in chat {chat_id}")
             return True
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error adding pending deletion: {e}")
+            
+        except DuplicateKeyError:
+            logger.debug(f"User {user_id} already authorized in chat {chat_id}")
+            return True  # Already authorized, still success
+            
+        except PyMongoError as e:
+            logger.error(f"Error authorizing user {user_id} in chat {chat_id}: {e}")
             return False
     
-    async def get_pending_deletions(self, limit: int = 100) -> list:
+    async def remove_authorized_user(self, chat_id: int, user_id: int) -> bool:
         """
-        Get all pending deletions that are ready
+        Remove a user from the authorized list for a group.
         
         Args:
-            limit: Maximum number of deletions to retrieve
+            chat_id: Telegram chat ID
+            user_id: Telegram user ID to deauthorize
             
         Returns:
-            list: List of pending deletion documents
+            bool: True if successful, False otherwise
         """
         try:
-            pending = await self.pending_deletions_collection.find(
-                {
-                    "scheduled_at": {"$lte": datetime.now()},
-                    "status": "pending"
-                }
-            ).limit(limit).to_list(length=limit)
+            result = await self.authorized_collection.delete_one({
+                "chat_id": chat_id,
+                "user_id": user_id
+            })
             
-            return pending
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error getting pending deletions: {e}")
+            if result.deleted_count > 0:
+                logger.info(f"User {user_id} deauthorized from chat {chat_id}")
+            else:
+                logger.debug(f"User {user_id} was not in authorized list for chat {chat_id}")
+            
+            return True
+            
+        except PyMongoError as e:
+            logger.error(f"Error deauthorizing user {user_id} from chat {chat_id}: {e}")
+            return False
+    
+    async def is_authorized_user(self, chat_id: int, user_id: int) -> bool:
+        """
+        Check if a user is authorized to edit messages in a group.
+        
+        Args:
+            chat_id: Telegram chat ID
+            user_id: Telegram user ID to check
+            
+        Returns:
+            bool: True if authorized, False otherwise
+        """
+        try:
+            authorized = await self.authorized_collection.find_one({
+                "chat_id": chat_id,
+                "user_id": user_id
+            })
+            
+            return authorized is not None
+            
+        except PyMongoError as e:
+            logger.error(f"Error checking authorization for user {user_id} in chat {chat_id}: {e}")
+            return False
+    
+    async def get_authorized_users(self, chat_id: int) -> List[int]:
+        """
+        Get list of all authorized users in a group.
+        
+        Args:
+            chat_id: Telegram chat ID
+            
+        Returns:
+            List[int]: List of authorized user IDs
+        """
+        try:
+            cursor = self.authorized_collection.find({"chat_id": chat_id})
+            authorized_users = []
+            
+            async for doc in cursor:
+                authorized_users.append(doc["user_id"])
+            
+            return authorized_users
+            
+        except PyMongoError as e:
+            logger.error(f"Error getting authorized users for chat {chat_id}: {e}")
             return []
     
-    async def mark_deletion_done(self, deletion_id: str) -> bool:
+    async def clear_authorized_users(self, chat_id: int) -> bool:
         """
-        Mark a deletion as completed
+        Remove all authorized users from a group.
         
         Args:
-            deletion_id: MongoDB object ID of the deletion record
+            chat_id: Telegram chat ID
             
         Returns:
-            bool: True if successful
+            bool: True if successful, False otherwise
         """
         try:
-            from bson import ObjectId
-            
-            await self.pending_deletions_collection.update_one(
-                {"_id": ObjectId(deletion_id)},
-                {
-                    "$set": {
-                        "status": "done",
-                        "completed_at": datetime.now()
-                    }
-                }
-            )
-            logger.info(f"[EditTrackerDB] Deletion marked as done: {deletion_id}")
+            result = await self.authorized_collection.delete_many({"chat_id": chat_id})
+            logger.info(f"Cleared {result.deleted_count} authorized users from chat {chat_id}")
             return True
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error marking deletion done: {e}")
+            
+        except PyMongoError as e:
+            logger.error(f"Error clearing authorized users for chat {chat_id}: {e}")
             return False
     
-    async def remove_pending_deletion(self, deletion_id: str) -> bool:
-        """
-        Remove a pending deletion record
-        
-        Args:
-            deletion_id: MongoDB object ID of the deletion record
-            
-        Returns:
-            bool: True if successful
-        """
-        try:
-            from bson import ObjectId
-            
-            await self.pending_deletions_collection.delete_one(
-                {"_id": ObjectId(deletion_id)}
-            )
-            logger.info(f"[EditTrackerDB] Deletion removed: {deletion_id}")
-            return True
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error removing deletion: {e}")
-            return False
+    # ==================== LOGGING OPERATIONS ====================
     
-    # ────────────────────────────────────────────────────────────
-    # Edit History Management
-    # ────────────────────────────────────────────────────────────
-    
-    async def log_edit(
+    async def log_edit_action(
         self,
         chat_id: int,
         user_id: int,
         message_id: int,
-        original_text: str,
-        edited_text: str
+        action: str,
+        timestamp: Optional[datetime] = None
     ) -> bool:
         """
-        Log an edited message for history/audit trail
+        Log an edit action to the database.
         
         Args:
-            chat_id: Telegram group ID
-            user_id: User who edited
-            message_id: Message ID
-            original_text: Original message text
-            edited_text: Edited message text
+            chat_id: Telegram chat ID
+            user_id: Telegram user ID who edited
+            message_id: Message ID that was edited
+            action: Action taken (e.g., "deleted", "allowed")
+            timestamp: Optional timestamp (defaults to now)
             
         Returns:
-            bool: True if successful
+            bool: True if successful, False otherwise
         """
         try:
-            history = {
+            log_entry = {
                 "chat_id": chat_id,
                 "user_id": user_id,
                 "message_id": message_id,
-                "original_text": original_text[:500],  # Store only first 500 chars
-                "edited_text": edited_text[:500],
-                "timestamp": datetime.now()
+                "action": action,
+                "timestamp": timestamp or datetime.utcnow()
             }
             
-            await self.edit_history_collection.insert_one(history)
-            logger.debug(f"[EditTrackerDB] Edit logged: {chat_id}/{message_id}")
+            await self.logs_collection.insert_one(log_entry)
+            logger.debug(f"Logged edit action: {action} for message {message_id} in chat {chat_id}")
             return True
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error logging edit: {e}")
+            
+        except PyMongoError as e:
+            logger.error(f"Error logging edit action: {e}")
             return False
     
-    async def get_user_edit_count(self, chat_id: int, user_id: int, hours: int = 24) -> int:
+    async def get_edit_logs(
+        self,
+        chat_id: int,
+        limit: int = 100,
+        days: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
         """
-        Get number of edits by user in the last N hours
+        Get edit logs for a group.
         
         Args:
-            chat_id: Telegram group ID
-            user_id: User ID
-            hours: Number of hours to check
+            chat_id: Telegram chat ID
+            limit: Maximum number of logs to return
+            days: Optional filter for logs within last N days
+            
+        Returns:
+            List[Dict]: List of log entries
+        """
+        try:
+            query = {"chat_id": chat_id}
+            
+            # Add time filter if specified
+            if days:
+                cutoff_date = datetime.utcnow() - timedelta(days=days)
+                query["timestamp"] = {"$gte": cutoff_date}
+            
+            cursor = self.logs_collection.find(query).sort("timestamp", -1).limit(limit)
+            
+            logs = []
+            async for log in cursor:
+                logs.append(log)
+            
+            return logs
+            
+        except PyMongoError as e:
+            logger.error(f"Error getting edit logs for chat {chat_id}: {e}")
+            return []
+    
+    async def get_user_edit_count(self, chat_id: int, user_id: int, days: int = 7) -> int:
+        """
+        Get count of edits by a user in last N days.
+        
+        Args:
+            chat_id: Telegram chat ID
+            user_id: Telegram user ID
+            days: Number of days to look back
             
         Returns:
             int: Number of edits
         """
         try:
-            since = datetime.now() - timedelta(hours=hours)
+            cutoff_date = datetime.utcnow() - timedelta(days=days)
             
-            count = await self.edit_history_collection.count_documents({
+            count = await self.logs_collection.count_documents({
                 "chat_id": chat_id,
                 "user_id": user_id,
-                "timestamp": {"$gte": since}
+                "timestamp": {"$gte": cutoff_date}
             })
             
             return count
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error getting edit count: {e}")
+            
+        except PyMongoError as e:
+            logger.error(f"Error getting edit count for user {user_id} in chat {chat_id}: {e}")
             return 0
     
-    # ────────────────────────────────────────────────────────────
-    # Cleanup & Maintenance
-    # ────────────────────────────────────────────────────────────
+    # ==================== CLEANUP OPERATIONS ====================
     
-    async def cleanup_old_data(self, days: int = 7) -> bool:
+    async def cleanup_chat_data(self, chat_id: int) -> bool:
         """
-        Clean up old edit history data
+        Remove all data for a chat (when bot leaves group).
         
         Args:
-            days: Delete records older than N days
+            chat_id: Telegram chat ID
             
         Returns:
-            bool: True if successful
+            bool: True if successful, False otherwise
         """
         try:
-            cutoff = datetime.now() - timedelta(days=days)
+            # Remove config
+            await self.config_collection.delete_one({"chat_id": chat_id})
             
-            result = await self.edit_history_collection.delete_many({
-                "timestamp": {"$lt": cutoff}
-            })
+            # Remove authorized users
+            await self.authorized_collection.delete_many({"chat_id": chat_id})
             
-            logger.info(f"[EditTrackerDB] Deleted {result.deleted_count} old records")
+            # Note: Logs are kept for analytics (will expire via TTL index)
+            
+            logger.info(f"Cleaned up data for chat {chat_id}")
             return True
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error cleaning up data: {e}")
+            
+        except PyMongoError as e:
+            logger.error(f"Error cleaning up data for chat {chat_id}: {e}")
             return False
     
-    async def get_stats(self, chat_id: int) -> Dict[str, Any]:
+    async def get_stats(self) -> Dict[str, Any]:
         """
-        Get statistics for a chat
+        Get global statistics for anti-edit feature.
         
-        Args:
-            chat_id: Telegram group ID
-            
         Returns:
-            dict: Statistics
+            Dict: Statistics including total groups, authorized users, etc.
         """
         try:
-            config = await self.get_config(chat_id)
+            total_groups = await self.config_collection.count_documents({})
+            enabled_groups = await self.config_collection.count_documents({"enabled": True})
+            total_authorized = await self.authorized_collection.count_documents({})
             
-            pending = await self.pending_deletions_collection.count_documents({
-                "chat_id": chat_id,
-                "status": "pending"
-            })
-            
-            completed = await self.pending_deletions_collection.count_documents({
-                "chat_id": chat_id,
-                "status": "done"
-            })
-            
-            total_edits = await self.edit_history_collection.count_documents({
-                "chat_id": chat_id
+            # Get recent activity (last 24 hours)
+            yesterday = datetime.utcnow() - timedelta(days=1)
+            recent_edits = await self.logs_collection.count_documents({
+                "timestamp": {"$gte": yesterday}
             })
             
             return {
-                "enabled": config.get("enabled", True),
-                "warning_time": config.get("warning_time", 60),
-                "pending_deletions": pending,
-                "completed_deletions": completed,
-                "total_edits_logged": total_edits
+                "total_groups": total_groups,
+                "enabled_groups": enabled_groups,
+                "disabled_groups": total_groups - enabled_groups,
+                "total_authorized_users": total_authorized,
+                "recent_edits_24h": recent_edits
             }
-        except Exception as e:
-            logger.error(f"[EditTrackerDB] Error getting stats: {e}")
+            
+        except PyMongoError as e:
+            logger.error(f"Error getting stats: {e}")
             return {}
-
-
-# ────────────────────────────────────────────────────────────
-# Global instance
-# ────────────────────────────────────────────────────────────
-
-edit_tracker_db: Optional[EditTrackerDB] = None
-
-
-async def init_edit_tracker_db(mongo_db: AsyncIOMotorDatabase) -> EditTrackerDB:
-    """
-    Initialize the edit tracker database
     
-    Args:
-        mongo_db: Motor AsyncIO MongoDB database instance
-        
+    async def close(self):
+        """Close MongoDB connection."""
+        try:
+            self.client.close()
+            logger.info("EditTrackerDB connection closed")
+        except Exception as e:
+            logger.error(f"Error closing EditTrackerDB connection: {e}")
+
+
+# ==================== GLOBAL INSTANCE ====================
+
+# Create global instance
+_edit_tracker_db: Optional[EditTrackerDB] = None
+
+
+def get_edit_tracker_db() -> EditTrackerDB:
+    """
+    Get or create the global EditTrackerDB instance.
+    
     Returns:
-        EditTrackerDB: Initialized database handler
+        EditTrackerDB: Global database instance
     """
-    global edit_tracker_db
+    global _edit_tracker_db
     
-    edit_tracker_db = EditTrackerDB(mongo_db)
-    await edit_tracker_db.create_indexes()
-    logger.info("[EditTrackerDB] Initialized successfully")
+    if _edit_tracker_db is None:
+        _edit_tracker_db = EditTrackerDB()
     
-    return edit_tracker_db
+    return _edit_tracker_db
+
+
+# ==================== CONVENIENCE FUNCTIONS ====================
+
+async def enable_antiedit(chat_id: int) -> bool:
+    """Enable anti-edit for a group."""
+    db = get_edit_tracker_db()
+    return await db.enable_antiedit(chat_id)
+
+
+async def disable_antiedit(chat_id: int) -> bool:
+    """Disable anti-edit for a group."""
+    db = get_edit_tracker_db()
+    return await db.disable_antiedit(chat_id)
+
+
+async def is_antiedit_enabled(chat_id: int) -> bool:
+    """Check if anti-edit is enabled."""
+    db = get_edit_tracker_db()
+    return await db.is_antiedit_enabled(chat_id)
+
+
+async def add_authorized_user(chat_id: int, user_id: int) -> bool:
+    """Add authorized user."""
+    db = get_edit_tracker_db()
+    return await db.add_authorized_user(chat_id, user_id)
+
+
+async def remove_authorized_user(chat_id: int, user_id: int) -> bool:
+    """Remove authorized user."""
+    db = get_edit_tracker_db()
+    return await db.remove_authorized_user(chat_id, user_id)
+
+
+async def is_authorized_user(chat_id: int, user_id: int) -> bool:
+    """Check if user is authorized."""
+    db = get_edit_tracker_db()
+    return await db.is_authorized_user(chat_id, user_id)
+
+
+async def get_authorized_users(chat_id: int) -> List[int]:
+    """Get list of authorized users."""
+    db = get_edit_tracker_db()
+    return await db.get_authorized_users(chat_id)
+
+
+async def log_edit_action(
+    chat_id: int,
+    user_id: int,
+    message_id: int,
+    action: str,
+    timestamp: Optional[datetime] = None
+) -> bool:
+    """Log an edit action."""
+    db = get_edit_tracker_db()
+    return await db.log_edit_action(chat_id, user_id, message_id, action, timestamp)
+
+
+async def cleanup_chat_data(chat_id: int) -> bool:
+    """Cleanup all data for a chat."""
+    db = get_edit_tracker_db()
+    return await db.cleanup_chat_data(chat_id)
+
+
+async def get_stats() -> Dict[str, Any]:
+    """Get global statistics."""
+    db = get_edit_tracker_db()
+    return await db.get_stats()
+
+
+async def initialize_database():
+    """
+    Initialize database and create indexes.
+    Should be called during bot startup.
+    """
+    db = get_edit_tracker_db()
+    await db.create_indexes()
+    logger.info("Edit tracker database initialized and indexed")
+
+
+logger.info("Edit tracker database module loaded successfully")
