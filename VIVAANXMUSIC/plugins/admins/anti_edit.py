@@ -1,14 +1,16 @@
 """
 Anti-Edit Plugin for VivaanXMusic Bot
-Detects and deletes edited messages in groups with warnings.
-Only authorized users can edit messages without deletion.
+
+Detects and deletes only actual text/caption edits in groups with warnings.
+Ignores emoji reactions, replies, and metadata updates.
 
 Features:
-- Ignores emoji reactions (Telegram's reaction feature)
+- Detects ONLY text/caption changes (ignores reactions, replies, metadata)
+- Stores original message content to verify actual edits
 - 1-minute warning before deletion
-- Works on messages edited at any time (even hours later)
-- Only deletes the edited message (not replies)
+- Works on messages edited at any time
 - Proper authorization system
+- Comprehensive logging
 
 Commands:
 - /antiedit on/off: Enable/disable anti-edit (Admin/Owner only)
@@ -21,6 +23,7 @@ import asyncio
 import logging
 from typing import Optional, Dict, Set
 from datetime import datetime
+from collections import defaultdict
 
 from pyrogram import Client, filters
 from pyrogram.types import Message
@@ -48,6 +51,7 @@ from VIVAANXMUSIC.mongo.edit_tracker_db import (
 
 # Logger setup
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # Configuration
 EDIT_WARNING_TIME = 60  # Wait 60 seconds (1 minute) before deleting
@@ -58,9 +62,14 @@ WARNING_MESSAGE = (
     "💡 Contact admins if you need edit permission."
 )
 
-# In-memory cache for admin status (reduces API calls)
-admin_cache: Dict[int, Dict[int, bool]] = {}
-cache_expiry = 300  # 5 minutes
+# In-memory cache for admin status and original messages
+admin_cache: Dict[int, Dict[int, tuple[bool, float]]] = {}
+ADMIN_CACHE_TTL = 300  # 5 minutes
+
+# Store original message content to detect actual text changes
+# Structure: {chat_id: {message_id: {"text": str, "caption": str, "media_type": str}}}
+original_messages: Dict[int, Dict[int, Dict[str, Optional[str]]]] = defaultdict(lambda: defaultdict(dict))
+MAX_STORED_MESSAGES = 10000  # Limit memory usage
 
 
 class AntiEditManager:
@@ -73,7 +82,7 @@ class AntiEditManager:
     async def is_admin_or_owner(self, chat_id: int, user_id: int) -> bool:
         """
         Check if user is admin or owner of the group.
-        Uses caching to reduce API calls.
+        Uses caching with TTL to reduce API calls.
         
         Args:
             chat_id: Telegram chat ID
@@ -87,17 +96,20 @@ class AntiEditManager:
             return True
         
         # Check cache first
+        current_time = datetime.now().timestamp()
         if chat_id in admin_cache and user_id in admin_cache[chat_id]:
-            return admin_cache[chat_id][user_id]
+            is_admin, cache_time = admin_cache[chat_id][user_id]
+            if current_time - cache_time < ADMIN_CACHE_TTL:
+                return is_admin
         
         try:
             member = await app.get_chat_member(chat_id, user_id)
             is_admin = member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
             
-            # Update cache
+            # Update cache with timestamp
             if chat_id not in admin_cache:
                 admin_cache[chat_id] = {}
-            admin_cache[chat_id][user_id] = is_admin
+            admin_cache[chat_id][user_id] = (is_admin, current_time)
             
             return is_admin
             
@@ -105,30 +117,85 @@ class AntiEditManager:
             logger.warning(f"Error checking admin status for user {user_id} in chat {chat_id}: {e}")
             return False
     
-    def is_reaction_update(self, message: Message) -> bool:
+    def store_original_message(self, message: Message):
         """
-        Check if the update is just an emoji reaction (not a text edit).
-        Telegram reactions don't trigger actual message edits in text content.
+        Store original message content to compare later for actual edits.
+        
+        Args:
+            message: Original message object
+        """
+        chat_id = message.chat.id
+        message_id = message.id
+        
+        # Limit memory usage - implement simple LRU-like behavior
+        if len(original_messages[chat_id]) > MAX_STORED_MESSAGES:
+            # Remove oldest 10% of messages
+            to_remove = len(original_messages[chat_id]) // 10
+            for old_msg_id in list(original_messages[chat_id].keys())[:to_remove]:
+                del original_messages[chat_id][old_msg_id]
+        
+        # Store text, caption, and media type
+        original_messages[chat_id][message_id] = {
+            "text": message.text,
+            "caption": message.caption,
+            "media_type": str(message.media) if message.media else None,
+            "timestamp": datetime.now().timestamp()
+        }
+    
+    def is_actual_text_edit(self, message: Message) -> bool:
+        """
+        Check if the edit is an actual text/caption change.
+        Compares current message with stored original.
         
         Args:
             message: The edited message object
             
         Returns:
-            bool: True if it's a reaction, False if it's a real edit
+            bool: True if text/caption actually changed, False otherwise
         """
-        # If message has no text/caption and no media change, it's likely just metadata
-        # Real edits will have text or caption
-        if not message.text and not message.caption:
-            return True
+        chat_id = message.chat.id
+        message_id = message.id
         
-        # If the edit date and message date are very close (< 1 second), 
-        # it might be a reaction or other metadata update
-        if message.edit_date and message.date:
-            time_diff = abs((message.edit_date - message.date).total_seconds())
-            if time_diff < 1:
-                return True
+        # If we don't have the original message stored, we can't verify
+        # In this case, check if there's actual content
+        if message_id not in original_messages[chat_id]:
+            # If message has text or caption, consider it a real edit
+            # (This handles messages sent before bot started)
+            has_content = bool(message.text or message.caption)
+            logger.debug(
+                f"No original stored for message {message_id} in chat {chat_id}. "
+                f"Has content: {has_content}"
+            )
+            return has_content
         
-        return False
+        original = original_messages[chat_id][message_id]
+        
+        # Compare text content
+        original_text = original.get("text")
+        current_text = message.text
+        
+        # Compare caption content
+        original_caption = original.get("caption")
+        current_caption = message.caption
+        
+        # Check if text actually changed
+        text_changed = original_text != current_text
+        caption_changed = original_caption != current_caption
+        
+        actual_edit = text_changed or caption_changed
+        
+        if actual_edit:
+            logger.info(
+                f"Actual edit detected in message {message_id} (chat {chat_id}): "
+                f"Text changed: {text_changed}, Caption changed: {caption_changed}"
+            )
+        else:
+            logger.debug(
+                f"No text change in message {message_id} (chat {chat_id}) - "
+                f"likely reaction or metadata update"
+            )
+        
+        return actual_edit
     
     async def should_delete_edit(self, chat_id: int, user_id: int) -> bool:
         """
@@ -160,6 +227,7 @@ class AntiEditManager:
     async def handle_edited_message(self, client: Client, message: Message):
         """
         Handle edited message detection and deletion with 1-minute warning.
+        Only processes actual text/caption edits.
         
         Args:
             client: Pyrogram client
@@ -173,9 +241,12 @@ class AntiEditManager:
         if not user_id:
             return
         
-        # Skip if it's just a reaction or metadata update (not actual text edit)
-        if self.is_reaction_update(message):
-            logger.debug(f"Skipping reaction/metadata update in chat {chat_id}")
+        # CRITICAL: Check if this is an actual text/caption edit
+        if not self.is_actual_text_edit(message):
+            logger.debug(
+                f"Ignoring non-text edit for message {message_id} in chat {chat_id} "
+                f"(reaction, reply, or metadata update)"
+            )
             return
         
         # Create unique identifier for this edit
@@ -183,6 +254,7 @@ class AntiEditManager:
         
         # Prevent duplicate processing
         if edit_key in self.processing_edits:
+            logger.debug(f"Edit {edit_key} already being processed, skipping")
             return
         
         self.processing_edits.add(edit_key)
@@ -190,6 +262,12 @@ class AntiEditManager:
         try:
             # Check if we should delete this edit
             if not await self.should_delete_edit(chat_id, user_id):
+                logger.debug(
+                    f"Edit allowed for user {user_id} in chat {chat_id} "
+                    f"(authorized or anti-edit disabled)"
+                )
+                # Update stored message with new content (authorized edit)
+                self.store_original_message(message)
                 return
             
             # Send warning message
@@ -201,17 +279,24 @@ class AntiEditManager:
                 )
                 
                 logger.info(
-                    f"Edit detected: User {user_id} edited message {message_id} in chat {chat_id}. "
-                    f"Warning sent, deletion in {EDIT_WARNING_TIME} seconds."
+                    f"Text edit detected: User {user_id} edited message {message_id} "
+                    f"in chat {chat_id}. Warning sent, deletion in {EDIT_WARNING_TIME}s."
                 )
                 
                 # Wait 1 minute before deletion
                 await asyncio.sleep(EDIT_WARNING_TIME)
                 
-                # Delete the edited message ONLY (not the warning or any replies)
+                # Delete the edited message ONLY
                 try:
                     await message.delete()
-                    logger.info(f"Deleted edited message {message_id} from user {user_id} in chat {chat_id}")
+                    logger.info(
+                        f"Deleted edited message {message_id} from user {user_id} "
+                        f"in chat {chat_id}"
+                    )
+                    
+                    # Remove from storage
+                    if message_id in original_messages[chat_id]:
+                        del original_messages[chat_id][message_id]
                     
                     # Log the action to database
                     await log_edit_action(
@@ -224,7 +309,8 @@ class AntiEditManager:
                     
                 except MessageDeleteForbidden:
                     logger.warning(
-                        f"Cannot delete message {message_id} in chat {chat_id} - insufficient permissions"
+                        f"Cannot delete message {message_id} in chat {chat_id} - "
+                        f"insufficient permissions"
                     )
                 except Exception as e:
                     logger.error(f"Error deleting message {message_id}: {e}")
@@ -252,7 +338,30 @@ class AntiEditManager:
 anti_edit_manager = AntiEditManager()
 
 
-# ==================== MESSAGE EDIT HANDLER ====================
+# ==================== MESSAGE HANDLERS ====================
+
+@app.on_message(
+    filters.group & ~filters.bot & ~filters.service & ~filters.edited
+)
+async def store_new_message(client: Client, message: Message):
+    """
+    Store original content of new messages for later comparison.
+    This allows us to detect actual text edits vs reactions/replies.
+    """
+    try:
+        # Only store if anti-edit might be enabled (check cache or assume yes)
+        chat_id = message.chat.id
+        
+        # Store text and caption content
+        anti_edit_manager.store_original_message(message)
+        
+        logger.debug(
+            f"Stored original content for message {message.id} in chat {chat_id}"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error storing original message: {e}")
+
 
 @app.on_edited_message(
     filters.group & ~filters.bot & ~filters.service
@@ -262,10 +371,8 @@ async def on_message_edited(client: Client, message: Message):
     Handler for all edited messages in groups.
     Triggers anti-edit check and deletion if needed.
     
-    Note: This handler ignores:
-    - Bot messages
-    - Service messages (user joined, etc.)
-    - Emoji reactions (detected via is_reaction_update)
+    Note: This handler now only processes ACTUAL text/caption edits.
+    Reactions, replies, and metadata updates are ignored.
     """
     try:
         await anti_edit_manager.handle_edited_message(client, message)
@@ -307,7 +414,8 @@ async def toggle_antiedit(client: Client, message: Message):
             "• `/antiedit off` - Disable anti-edit\n\n"
             "**Info:**\n"
             "⏱️ Warning time: 1 minute before deletion\n"
-            "🔒 Authorized users can edit freely"
+            "🔒 Authorized users can edit freely\n"
+            "✨ Only detects actual text changes (ignores reactions/replies)"
         )
         return
     
@@ -317,8 +425,9 @@ async def toggle_antiedit(client: Client, message: Message):
         await enable_antiedit(chat_id)
         await message.reply_text(
             "✅ **Anti-Edit Enabled**\n\n"
-            "All edited messages will be deleted after a 1-minute warning, "
+            "All edited messages (text changes only) will be deleted after a 1-minute warning, "
             "unless the user is authorized with `/authedit`.\n\n"
+            "✨ **Note:** Emoji reactions and replies won't trigger deletion.\n\n"
             "💡 **Tip:** Use `/authedit` (reply to user) to authorize someone to edit messages."
         )
         logger.info(f"Anti-edit enabled in chat {chat_id} by user {user_id}")
@@ -482,18 +591,45 @@ async def manage_authorized_users(client: Client, message: Message):
         )
 
 
-# ==================== CACHE CLEANUP ====================
+# ==================== MAINTENANCE TASKS ====================
 
-async def clear_admin_cache_periodically():
-    """Clear admin cache every 5 minutes to ensure fresh data."""
+async def periodic_cache_cleanup():
+    """Clean up expired cache entries and old message storage."""
     while True:
-        await asyncio.sleep(cache_expiry)
-        admin_cache.clear()
-        logger.debug("Admin cache cleared")
+        try:
+            await asyncio.sleep(ADMIN_CACHE_TTL)
+            
+            # Clean admin cache
+            current_time = datetime.now().timestamp()
+            for chat_id in list(admin_cache.keys()):
+                for user_id in list(admin_cache[chat_id].keys()):
+                    _, cache_time = admin_cache[chat_id][user_id]
+                    if current_time - cache_time > ADMIN_CACHE_TTL:
+                        del admin_cache[chat_id][user_id]
+                
+                # Remove empty chat entries
+                if not admin_cache[chat_id]:
+                    del admin_cache[chat_id]
+            
+            # Clean old message storage (messages older than 24 hours)
+            current_time = datetime.now().timestamp()
+            for chat_id in list(original_messages.keys()):
+                for msg_id in list(original_messages[chat_id].keys()):
+                    msg_time = original_messages[chat_id][msg_id].get("timestamp", 0)
+                    if current_time - msg_time > 86400:  # 24 hours
+                        del original_messages[chat_id][msg_id]
+                
+                # Remove empty chat entries
+                if not original_messages[chat_id]:
+                    del original_messages[chat_id]
+            
+            logger.debug("Cache cleanup completed")
+            
+        except Exception as e:
+            logger.error(f"Error in cache cleanup: {e}")
 
 
-# Start cache cleanup task
-asyncio.create_task(clear_admin_cache_periodically())
+# Start maintenance task
+asyncio.create_task(periodic_cache_cleanup())
 
-
-logger.info("Anti-Edit plugin loaded successfully with 1-minute warning system")
+logger.info("✅ Anti-Edit plugin loaded successfully with text-only edit detection")
