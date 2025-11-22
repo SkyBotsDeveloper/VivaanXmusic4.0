@@ -3,10 +3,10 @@ import logging
 from typing import Optional, Dict, Set
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from pyrogram.errors import MessageDeleteForbidden, UserNotParticipant, FloodWait
+from pyrogram.errors import UserNotParticipant
 from config import OWNER_ID, EDIT_DELETE_TIME, EDIT_WARNING_MESSAGE
-
 from VIVAANXMUSIC import app
+
 try:
     from VIVAANXMUSIC.mongo.edit_tracker_db import edit_tracker_db
 except ImportError:
@@ -89,22 +89,25 @@ class AntiEditManager:
 
 anti_edit_manager = AntiEditManager()
 
+
+# ⏩ The ONLY safe way to distinguish REAL USER EDITS vs emoji reactions:
+_last_text_by_message: Dict[tuple, tuple] = {}  # (chat_id, message_id) -> (text, caption)
+
+@app.on_message(filters.group)
+async def remember_original_message(_, message: Message):
+    """Keeps original (text, caption) for later diff check."""
+    if hasattr(message, "text") or hasattr(message, "caption"):
+        _last_text_by_message[(message.chat.id, message.id)] = (getattr(message, "text", None), getattr(message, "caption", None))
+
 def is_real_edit(message: Message) -> bool:
-    """
-    Returns True only for real text/caption edits by a human, not for:
-    - reactions (emoji add/remove)
-    - bot replies
-    - system/service/forward/media/album/game edits
-    """
+    """Returns True only for a REAL text/caption edit by a human user (not emoji, sticker, bot, reply, media, etc.)"""
     if not message or not message.from_user:
         return False
-    # Reactions/emoji edits: no change in text/caption, only edit_date changes
-    original_text, original_caption = getattr(message, "text", None), getattr(message, "caption", None)
-    if not (original_text or original_caption):
+    # Skip edits from bots
+    if message.from_user.is_bot:
         return False
-    # Service/system/bot/media/game/etc
-    if (
-        getattr(message, "service", False)
+    # Service/forwards/via/reply/media/game
+    if (getattr(message, "service", False)
         or getattr(message, "reply_to_message", None)
         or getattr(message, "forward_from", None)
         or getattr(message, "forward_from_chat", None)
@@ -115,23 +118,28 @@ def is_real_edit(message: Message) -> bool:
         or getattr(message, "audio", None)
         or getattr(message, "video", None)
         or getattr(message, "game", None)
-        or message.from_user.is_bot
         or (hasattr(message, "new_chat_members") and message.new_chat_members)
         or (hasattr(message, "left_chat_member") and message.left_chat_member)
-        or (hasattr(message, "pinned_message") and message.pinned_message)
-    ):
+        or (hasattr(message, "pinned_message") and message.pinned_message)):
         return False
-    # If only text/caption and from human: allow through for checking
-    return True
+    # True edit: the text/caption changed compared to original!
+    orig = _last_text_by_message.get((message.chat.id, message.id), (None, None))
+    # Compare text/caption
+    cur_text, cur_caption = getattr(message, "text", None), getattr(message, "caption", None)
+    edited = (orig[0] is not None or orig[1] is not None) and ((cur_text != orig[0]) or (cur_caption != orig[1]))
+    return edited
 
 @app.on_edited_message(filters.group)
 async def handle_edited_message(client: Client, message: Message):
     if not is_real_edit(message):
+        # Always update to latest text/caption so further edits stay safe
+        _last_text_by_message[(message.chat.id, message.id)] = (getattr(message, "text", None), getattr(message, "caption", None))
         return
     chat_id = message.chat.id
     user_id = message.from_user.id
     should_delete = await anti_edit_manager.should_delete_edit(chat_id, user_id)
     if not should_delete:
+        _last_text_by_message[(chat_id, message.id)] = (getattr(message, "text", None), getattr(message, "caption", None))
         return
     config = await edit_tracker_db.get_config(chat_id)
     warning_time = config.get("warning_time", EDIT_DELETE_TIME)
@@ -140,6 +148,30 @@ async def handle_edited_message(client: Client, message: Message):
     warning_msg = await anti_edit_manager.send_warning(chat_id, message.id, warning_time)
     warn_id = warning_msg.id if warning_msg else None
     await anti_edit_manager.schedule_deletion(chat_id, message.id, warn_id, warning_time)
+    # Update last text/caption after action
+    _last_text_by_message[(chat_id, message.id)] = (getattr(message, "text", None), getattr(message, "caption", None))
+
+@app.on_message(filters.command("antiedit") & filters.group)
+async def antiedit_toggle(client: Client, message: Message):
+    if not (await anti_edit_manager.is_admin_or_owner(message.chat.id, message.from_user.id)):
+        return await message.reply_text("❌ **Admin only**", quote=True)
+    if not edit_tracker_db:
+        return await message.reply_text("❌ **Database not initialized**")
+    args = message.text.split()
+    chat_id = message.chat.id
+    if len(args) == 1:
+        conf = await edit_tracker_db.get_config(chat_id)
+        enabled = conf.get("enabled", True)
+        return await message.reply_text(f"Anti-edit currently **{'ON' if enabled else 'OFF'}**.")
+    cmd = args[1].lower()
+    if cmd == "on":
+        await edit_tracker_db.toggle_enabled(chat_id, True)
+        await message.reply_text("✅ **Anti-edit enabled** (only actual edits—no auto-delete for emoji/reactions/etc).")
+    elif cmd == "off":
+        await edit_tracker_db.toggle_enabled(chat_id, False)
+        await message.reply_text("❌ **Anti-edit disabled**.")
+    else:
+        await message.reply_text("Use `/antiedit on` or `/antiedit off`.")
 
 @app.on_message(filters.command("editauth") & filters.group)
 async def editauth_command(client: Client, message: Message):
@@ -150,9 +182,9 @@ async def editauth_command(client: Client, message: Message):
     chat_id = message.chat.id
     target_user = message.reply_to_message.from_user.id
     AntiEditManager.edit_exempt_users.setdefault(chat_id, set()).add(target_user)
-    await message.reply_text("✅ User is now allowed to edit messages in this group (immune to anti-edit locks).")
+    await message.reply_text("✅ User is now allowed to edit freely in this group (immune to antiedit).")
 
-@app.on_message(filters.command(["deleditauth", "editauthremove", "editauthdel"]) & filters.group)
+@app.on_message(filters.command("editauthremove") & filters.group)
 async def editauth_remove_command(client: Client, message: Message):
     if not (await anti_edit_manager.is_admin_or_owner(message.chat.id, message.from_user.id)):
         return await message.reply_text("❌ **Admin only**", quote=True)
@@ -161,7 +193,7 @@ async def editauth_remove_command(client: Client, message: Message):
     chat_id = message.chat.id
     target_user = message.reply_to_message.from_user.id
     AntiEditManager.edit_exempt_users.setdefault(chat_id, set()).discard(target_user)
-    await message.reply_text("❎ User is no longer bypassing anti-edit.")
+    await message.reply_text("❎ User is no longer special—edits will be deleted as normal.")
 
 @app.on_message(filters.command("editauthlist") & filters.group)
 async def editauth_list_command(client: Client, message: Message):
@@ -178,6 +210,7 @@ async def editauth_list_command(client: Client, message: Message):
 
 __all__ = [
     "handle_edited_message",
+    "antiedit_toggle",
     "editauth_command",
     "editauth_remove_command",
     "editauth_list_command",
