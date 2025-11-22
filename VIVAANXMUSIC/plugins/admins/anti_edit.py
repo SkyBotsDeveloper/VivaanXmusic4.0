@@ -1,13 +1,12 @@
 """
 Anti-Edit Message Detection Plugin
-Perfect version for VivaanXMusic4.0 with JARVIS bot
+Perfect version for VivaanXMusic4.0 with kurigram
 
 Features:
 - Detects ONLY real message edits (never replies, reactions, quotes, forwards)
-- Sends warning and deletes edited messages after configurable delay
-- /edit enable and /edit disable commands for easy control
-- 100% reliable admin/owner detection in all Telegram group types
-- Works perfectly with JARVIS bot client
+- Sends warning and deletes edited messages
+- /edit enable and /edit disable commands
+- Works perfectly with kurigram fork and JARVIS setup
 """
 
 import asyncio
@@ -18,7 +17,7 @@ from pyrogram.types import Message
 from pyrogram.errors import MessageDeleteForbidden, UserNotParticipant, FloodWait
 from config import OWNER_ID, EDIT_DELETE_TIME, EDIT_WARNING_MESSAGE
 
-# Import the JARVIS bot instance
+# Import the correct bot client (JARVIS from core.bot, not core.call)
 from VIVAANXMUSIC import app
 
 try:
@@ -30,29 +29,31 @@ logger = logging.getLogger(__name__)
 
 
 class AntiEditManager:
-    """Manages anti-edit detection and deletion for groups"""
+    """Manages anti-edit detection and deletion"""
     
     def __init__(self):
         self.pending_tasks: Dict[str, asyncio.Task] = {}
-        # Store reference to bot client
-        self.bot = app
 
     async def is_admin_or_owner(self, chat_id: int, user_id: int) -> bool:
         """
         Check if user is admin or owner
-        Uses self.bot (the JARVIS instance) for all operations
+        Uses only get_chat_member (compatible with kurigram)
         """
         try:
-            # Use self.bot instead of app to ensure correct client
-            member = await self.bot.get_chat_member(chat_id, user_id)
+            # Use app (which is JARVIS from core.bot)
+            member = await app.get_chat_member(chat_id, user_id)
+            
+            # Get status
             status = getattr(member, "status", None)
+            
+            # Check if administrator or creator
             if status in ("administrator", "creator"):
                 return True
             
-            # Fallback: Check admin list
-            admins = await self.bot.get_chat_administrators(chat_id)
-            for admin in admins:
-                if admin.user.id == user_id:
+            # Fallback: check string representation
+            if hasattr(member, "status"):
+                status_str = str(member.status).lower()
+                if "admin" in status_str or "creator" in status_str or "owner" in status_str:
                     return True
             
             return False
@@ -60,12 +61,14 @@ class AntiEditManager:
         except FloodWait as fe:
             await asyncio.sleep(fe.value)
             return await self.is_admin_or_owner(chat_id, user_id)
+        except UserNotParticipant:
+            return False
         except Exception as e:
             logger.error(f"[AntiEdit] Error checking admin status: {e}")
             return False
 
     async def should_detect_edit(self, chat_id: int, user_id: int) -> bool:
-        """Determine if we should detect and delete edits from this user"""
+        """Determine if we should detect edits from this user"""
         try:
             if not edit_tracker_db:
                 return False
@@ -92,7 +95,7 @@ class AntiEditManager:
         """Send warning message"""
         try:
             text = EDIT_WARNING_MESSAGE.format(time=warning_time)
-            return await self.bot.send_message(chat_id, text, reply_to_message_id=message_id)
+            return await app.send_message(chat_id, text, reply_to_message_id=message_id)
         except Exception as e:
             logger.error(f"[AntiEdit] Error sending warning: {e}")
             return None
@@ -110,7 +113,7 @@ class AntiEditManager:
                 await asyncio.sleep(delete_after_seconds)
                 
                 try:
-                    await self.bot.delete_messages(chat_id, message_id)
+                    await app.delete_messages(chat_id, message_id)
                     logger.info(f"[AntiEdit] Deleted edited message {chat_id}/{message_id}")
                 except MessageDeleteForbidden:
                     logger.warning(f"[AntiEdit] Cannot delete message {message_id}")
@@ -119,7 +122,7 @@ class AntiEditManager:
                 
                 if warning_msg_id:
                     try:
-                        await self.bot.delete_messages(chat_id, warning_msg_id)
+                        await app.delete_messages(chat_id, warning_msg_id)
                     except:
                         pass
                 
@@ -156,7 +159,6 @@ class AntiEditManager:
             logger.error(f"[AntiEdit] Error logging edit: {e}")
 
 
-# Initialize manager
 anti_edit_manager = AntiEditManager()
 
 
