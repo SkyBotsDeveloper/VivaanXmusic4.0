@@ -9,6 +9,7 @@ Features:
 - Admin word management
 - Statistics and logging
 - Configurable per group
+- Works perfectly with kurigram
 """
 
 import asyncio
@@ -16,7 +17,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Tuple
 from pyrogram import Client, filters
-from pyrogram.types import Message, ChatMember, User
+from pyrogram.types import Message, ChatMember, User, ChatPermissions
 from pyrogram.errors import (
     MessageNotModified,
     MessageDeleteForbidden,
@@ -31,6 +32,9 @@ from config import (
     DEFAULT_MUTE_DURATION,
     ABUSE_WARNING_DELETE_TIME
 )
+
+# Import the correct bot client
+from VIVAANXMUSIC import app
 
 # Import database and utilities
 try:
@@ -52,14 +56,25 @@ class AntiAbuseManager:
         """Initialize anti-abuse manager"""
         self.detector = get_detector() if get_detector else None
         self.warning_manager = get_warning_manager() if get_warning_manager else None
-        self.mute_tasks: Dict[str, asyncio.Task] = {}  # Track mute tasks
-        self.warning_delete_tasks: Dict[int, asyncio.Task] = {}  # Track warning deletion tasks
+        self.mute_tasks: Dict[str, asyncio.Task] = {}
+        self.warning_delete_tasks: Dict[int, asyncio.Task] = {}
     
-    async def is_admin(self, client: Client, chat_id: int, user_id: int) -> bool:
-        """Check if user is admin"""
+    async def is_admin(self, chat_id: int, user_id: int) -> bool:
+        """Check if user is admin - uses app directly"""
         try:
-            member = await client.get_chat_member(chat_id, user_id)
-            return member.status in ["creator", "administrator"]
+            member = await app.get_chat_member(chat_id, user_id)
+            status = getattr(member, "status", None)
+            
+            if status in ("administrator", "creator"):
+                return True
+            
+            # Fallback string check
+            if hasattr(member, "status"):
+                status_str = str(member.status).lower()
+                if "admin" in status_str or "creator" in status_str or "owner" in status_str:
+                    return True
+            
+            return False
         except UserNotParticipant:
             return False
         except Exception as e:
@@ -70,21 +85,8 @@ class AntiAbuseManager:
         """Check if user is bot owner"""
         return user_id == OWNER_ID
     
-    async def should_detect_abuse(
-        self,
-        chat_id: int,
-        user_id: int
-    ) -> bool:
-        """
-        Check if abuse should be detected
-        
-        Args:
-            chat_id: Chat ID
-            user_id: User ID
-            
-        Returns:
-            bool: True if should detect
-        """
+    async def should_detect_abuse(self, chat_id: int, user_id: int) -> bool:
+        """Check if abuse should be detected"""
         try:
             if not abuse_words_db:
                 return False
@@ -94,7 +96,6 @@ class AntiAbuseManager:
             if not config.get("enabled", True):
                 return False
             
-            # Skip owner
             if await self.is_owner(user_id):
                 return False
             
@@ -109,31 +110,18 @@ class AntiAbuseManager:
         chat_id: int,
         strict_mode: bool = False
     ) -> Tuple[bool, Optional[str]]:
-        """
-        Detect abuse in message
-        
-        Args:
-            text: Message text
-            chat_id: Chat ID
-            strict_mode: Enable strict mode
-            
-        Returns:
-            tuple: (detected, matched_word)
-        """
+        """Detect abuse in message"""
         try:
             if not text or not self.detector or not abuse_words_db:
                 return False, None
             
-            # Get all abuse words
             abuse_words = await abuse_words_db.get_all_abuse_words()
             
             if not abuse_words:
                 return False, None
             
-            # Extract base words
             words_list = [w.get("word") for w in abuse_words]
             
-            # Detect
             is_detected, matched_word = self.detector.detect_abuse(
                 text,
                 words_list,
@@ -147,7 +135,6 @@ class AntiAbuseManager:
     
     async def send_warning_message(
         self,
-        client: Client,
         chat_id: int,
         message_id: int,
         warnings: int,
@@ -155,21 +142,7 @@ class AntiAbuseManager:
         action: str,
         username: str = "User"
     ) -> Optional[Message]:
-        """
-        Send warning message
-        
-        Args:
-            client: Pyrogram client
-            chat_id: Chat ID
-            message_id: Original message ID
-            warnings: Warning count
-            limit: Warning limit
-            action: Action type
-            username: Username
-            
-        Returns:
-            Message: Sent message or None
-        """
+        """Send warning message"""
         try:
             if not self.warning_manager:
                 return None
@@ -181,7 +154,7 @@ class AntiAbuseManager:
                 username
             )
             
-            msg = await client.send_message(
+            msg = await app.send_message(
                 chat_id,
                 warning_text,
                 reply_to_message_id=message_id
@@ -195,7 +168,6 @@ class AntiAbuseManager:
     
     async def schedule_warning_deletion(
         self,
-        client: Client,
         chat_id: int,
         warning_msg_id: int,
         delete_after_seconds: int = 10
@@ -210,7 +182,7 @@ class AntiAbuseManager:
             async def delete_warning():
                 try:
                     await asyncio.sleep(delete_after_seconds)
-                    await client.delete_messages(chat_id, warning_msg_id)
+                    await app.delete_messages(chat_id, warning_msg_id)
                     logger.debug(f"[AntiAbuse] Deleted warning {warning_msg_id}")
                 except:
                     pass
@@ -225,28 +197,13 @@ class AntiAbuseManager:
     
     async def mute_user(
         self,
-        client: Client,
         chat_id: int,
         user_id: int,
         duration_minutes: int = 1440
     ) -> bool:
-        """
-        Mute user for specified duration
-        
-        Args:
-            client: Pyrogram client
-            chat_id: Chat ID
-            user_id: User ID
-            duration_minutes: Mute duration in minutes
-            
-        Returns:
-            bool: True if successful
-        """
+        """Mute user for specified duration"""
         try:
-            from pyrogram.types import ChatPermissions
-            
-            # Restrict user
-            await client.restrict_chat_member(
+            await app.restrict_chat_member(
                 chat_id,
                 user_id,
                 permissions=ChatPermissions(can_send_messages=False),
@@ -259,25 +216,10 @@ class AntiAbuseManager:
             logger.error(f"[AntiAbuse] Error muting user: {e}")
             return False
     
-    async def ban_user(
-        self,
-        client: Client,
-        chat_id: int,
-        user_id: int
-    ) -> bool:
-        """
-        Ban user permanently
-        
-        Args:
-            client: Pyrogram client
-            chat_id: Chat ID
-            user_id: User ID
-            
-        Returns:
-            bool: True if successful
-        """
+    async def ban_user(self, chat_id: int, user_id: int) -> bool:
+        """Ban user permanently"""
         try:
-            await client.ban_chat_member(chat_id, user_id)
+            await app.ban_chat_member(chat_id, user_id)
             logger.info(f"[AntiAbuse] User {user_id} banned from {chat_id}")
             return True
         except Exception as e:
@@ -286,30 +228,16 @@ class AntiAbuseManager:
     
     async def execute_action(
         self,
-        client: Client,
         chat_id: int,
         user_id: int,
         action: str,
         username: str = "User",
         duration_minutes: int = 1440
     ) -> bool:
-        """
-        Execute action on user
-        
-        Args:
-            client: Pyrogram client
-            chat_id: Chat ID
-            user_id: User ID
-            action: Action type (mute/ban/delete_only/warn_only)
-            username: Username
-            duration_minutes: Mute duration
-            
-        Returns:
-            bool: True if successful
-        """
+        """Execute action on user"""
         try:
             if action == "mute":
-                success = await self.mute_user(client, chat_id, user_id, duration_minutes)
+                success = await self.mute_user(chat_id, user_id, duration_minutes)
                 
                 if success:
                     msg_text = self.warning_manager.generate_action_message(
@@ -317,75 +245,62 @@ class AntiAbuseManager:
                         username,
                         duration_minutes
                     )
-                    
                     try:
-                        await client.send_message(chat_id, msg_text)
+                        await app.send_message(chat_id, msg_text)
                     except:
                         pass
                 
                 return success
             
             elif action == "ban":
-                success = await self.ban_user(client, chat_id, user_id)
+                success = await self.ban_user(chat_id, user_id)
                 
                 if success:
                     msg_text = self.warning_manager.generate_action_message(
                         "ban",
                         username
                     )
-                    
                     try:
-                        await client.send_message(chat_id, msg_text)
+                        await app.send_message(chat_id, msg_text)
                     except:
                         pass
                 
                 return success
             
-            # delete_only and warn_only don't need action
             return True
         except Exception as e:
             logger.error(f"[AntiAbuse] Error executing action: {e}")
             return False
 
 
-# Initialize manager
 anti_abuse_manager = AntiAbuseManager()
 
 
-# ────────────────────────────────────────────────────────────
-# Event Handlers
-# ────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════
+# MESSAGE HANDLER
+# ═══════════════════════════════════════════════════════════
 
-@Client.on_message(filters.text & filters.group & ~filters.bot & ~filters.service)
+@app.on_message(filters.text & filters.group & ~filters.bot & ~filters.service)
 async def handle_message_abuse(client: Client, message: Message):
-    """
-    Handle messages and detect abuse
-    
-    Args:
-        client: Pyrogram client
-        message: Message
-    """
+    """Handle messages and detect abuse"""
     try:
         chat_id = message.chat.id
         user_id = message.from_user.id if message.from_user else None
-        message_id = message.message_id
+        message_id = message.id
         
         if not user_id:
             return
         
-        # Check if should detect
         should_detect = await anti_abuse_manager.should_detect_abuse(chat_id, user_id)
         
         if not should_detect:
             return
         
-        # Get message text
         text = message.text or message.caption or ""
         
         if not text:
             return
         
-        # Get config
         config = await abuse_words_db.get_config(chat_id)
         strict_mode = config.get("strict_mode", False)
         warning_limit = config.get("warning_limit", DEFAULT_WARNING_LIMIT)
@@ -394,7 +309,6 @@ async def handle_message_abuse(client: Client, message: Message):
         delete_warning = config.get("delete_warning", True)
         warning_delete_time = config.get("warning_delete_time", ABUSE_WARNING_DELETE_TIME)
         
-        # Detect abuse
         is_detected, matched_word = await anti_abuse_manager.detect_abuse_in_message(
             text,
             chat_id,
@@ -404,16 +318,14 @@ async def handle_message_abuse(client: Client, message: Message):
         if not is_detected:
             return
         
-        # Delete abusive message
         try:
-            await client.delete_messages(chat_id, message_id)
+            await app.delete_messages(chat_id, message_id)
             logger.info(f"[AntiAbuse] Deleted abusive message in {chat_id}")
         except MessageDeleteForbidden:
             logger.warning(f"[AntiAbuse] Cannot delete message {message_id}")
         except Exception as e:
             logger.error(f"[AntiAbuse] Error deleting message: {e}")
         
-        # Add warning
         warnings = await abuse_words_db.add_warning(
             chat_id,
             user_id,
@@ -421,7 +333,6 @@ async def handle_message_abuse(client: Client, message: Message):
             text[:100]
         )
         
-        # Log detection
         await abuse_words_db.log_abuse_detection(
             chat_id,
             user_id,
@@ -430,12 +341,9 @@ async def handle_message_abuse(client: Client, message: Message):
             action
         )
         
-        # Get user info
         username = message.from_user.first_name if message.from_user else "User"
         
-        # Send warning message
         warning_msg = await anti_abuse_manager.send_warning_message(
-            client,
             chat_id,
             message_id,
             warnings,
@@ -444,16 +352,13 @@ async def handle_message_abuse(client: Client, message: Message):
             username
         )
         
-        # Schedule warning deletion if configured
         if delete_warning and warning_msg:
             await anti_abuse_manager.schedule_warning_deletion(
-                client,
                 chat_id,
-                warning_msg.message_id,
+                warning_msg.id,
                 warning_delete_time
             )
         
-        # Check if action should be taken
         should_act_result = anti_abuse_manager.warning_manager.should_take_action(
             warnings,
             warning_limit,
@@ -462,7 +367,6 @@ async def handle_message_abuse(client: Client, message: Message):
         
         if should_act_result["should_act"]:
             await anti_abuse_manager.execute_action(
-                client,
                 chat_id,
                 user_id,
                 action,
@@ -476,26 +380,16 @@ async def handle_message_abuse(client: Client, message: Message):
         logger.error(f"[AntiAbuse] Error handling message: {e}")
 
 
-# ────────────────────────────────────────────────────────────
-# Admin Commands
-# ────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════
+# ADMIN COMMANDS
+# ═══════════════════════════════════════════════════════════
 
-@Client.on_message(filters.command("antiabuse") & filters.group)
+@app.on_message(filters.command("antiabuse") & filters.group)
 async def antiabuse_command(client: Client, message: Message):
-    """
-    Configure anti-abuse detection
-    
-    /antiabuse - Show status
-    /antiabuse enable - Enable
-    /antiabuse disable - Disable
-    /antiabuse action mute/ban/delete_only/warn_only - Set action
-    /antiabuse limit 3 - Set warning limit
-    /antiabuse strict yes/no - Toggle strict mode
-    """
+    """Configure anti-abuse detection"""
     try:
-        # Check if admin
-        user = await client.get_chat_member(message.chat.id, message.from_user.id)
-        if user.status not in ["creator", "administrator"]:
+        is_admin = await anti_abuse_manager.is_admin(message.chat.id, message.from_user.id)
+        if not is_admin:
             return await message.reply_text("❌ **Admin only**")
         
         if not abuse_words_db:
@@ -512,12 +406,12 @@ async def antiabuse_command(client: Client, message: Message):
                 f"🚫 **Anti-Abuse Detection Status**\n\n"
                 f"**Enabled:** {'✅ Yes' if config.get('enabled') else '❌ No'}\n"
                 f"**Action:** `{config.get('action', 'delete_only')}`\n"
-                f"**Warning Limit:** {config.get('warning_limit', 3)} (0 = unlimited)\n"
-                f"**Mute Duration:** {config.get('mute_duration', 1440)} minutes\n"
+                f"**Warning Limit:** {config.get('warning_limit', 3)}\n"
+                f"**Mute Duration:** {config.get('mute_duration', 1440)}m\n"
                 f"**Strict Mode:** {'✅ Yes' if config.get('strict_mode') else '❌ No'}\n\n"
                 f"**Statistics:**\n"
                 f"📊 Total Words: {stats.get('total_abuse_words', 0)}\n"
-                f"📊 Total Violations: {stats.get('total_violations', 0)}\n"
+                f"📊 Violations: {stats.get('total_violations', 0)}\n"
                 f"📊 Users Warned: {stats.get('users_with_warnings', 0)}\n"
             )
             
@@ -525,11 +419,12 @@ async def antiabuse_command(client: Client, message: Message):
         
         command = parts[1].lower()
         
-        if command == "enable":
+        # Support both "on/off" and "enable/disable"
+        if command in ("on", "enable"):
             await abuse_words_db.toggle_enabled(message.chat.id, True)
             await message.reply_text("✅ **Anti-abuse detection enabled**")
         
-        elif command == "disable":
+        elif command in ("off", "disable"):
             await abuse_words_db.toggle_enabled(message.chat.id, False)
             await message.reply_text("❌ **Anti-abuse detection disabled**")
         
@@ -553,7 +448,7 @@ async def antiabuse_command(client: Client, message: Message):
                 limit = int(parts[2])
                 if await abuse_words_db.set_warning_limit(message.chat.id, limit):
                     msg = "unlimited" if limit == 0 else f"{limit}"
-                    await message.reply_text(f"✅ **Warning limit set to {msg}**")
+                    await message.reply_text(f"✅ **Warning limit: {msg}**")
                 else:
                     await message.reply_text("❌ **Invalid limit**")
             except ValueError:
@@ -573,14 +468,13 @@ async def antiabuse_command(client: Client, message: Message):
         
         else:
             await message.reply_text(
-                "❌ **Unknown command**\n\n"
-                "**Usage:**\n"
+                "**Commands:**\n"
                 "`/antiabuse` - Show status\n"
-                "`/antiabuse enable` - Enable\n"
-                "`/antiabuse disable` - Disable\n"
+                "`/antiabuse on` or `/antiabuse enable` - Enable\n"
+                "`/antiabuse off` or `/antiabuse disable` - Disable\n"
                 "`/antiabuse action [type]` - Set action\n"
                 "`/antiabuse limit [0-100]` - Set limit\n"
-                "`/antiabuse strict yes/no` - Toggle strict mode"
+                "`/antiabuse strict yes/no` - Strict mode"
             )
     
     except Exception as e:
@@ -588,11 +482,10 @@ async def antiabuse_command(client: Client, message: Message):
         await message.reply_text(f"❌ **Error:** {str(e)[:100]}")
 
 
-@Client.on_message(filters.command("addabuse") & filters.group)
+@app.on_message(filters.command("addabuse") & filters.group)
 async def addabuse_command(client: Client, message: Message):
     """Add abusive word"""
     try:
-        # Check if owner
         if message.from_user.id != OWNER_ID:
             return await message.reply_text("❌ **Owner only**")
         
@@ -620,18 +513,17 @@ async def addabuse_command(client: Client, message: Message):
         if success:
             await message.reply_text(f"✅ **Word added:** `{word}` ({severity})")
         else:
-            await message.reply_text(f"❌ **Word already exists or error occurred**")
+            await message.reply_text(f"❌ **Word exists or error**")
     
     except Exception as e:
         logger.error(f"[AntiAbuse] Error in addabuse: {e}")
         await message.reply_text(f"❌ **Error:** {str(e)[:100]}")
 
 
-@Client.on_message(filters.command("delabuse") & filters.group)
+@app.on_message(filters.command("delabuse") & filters.group)
 async def delabuse_command(client: Client, message: Message):
     """Remove abusive word"""
     try:
-        # Check if owner
         if message.from_user.id != OWNER_ID:
             return await message.reply_text("❌ **Owner only**")
         
@@ -657,7 +549,7 @@ async def delabuse_command(client: Client, message: Message):
         await message.reply_text(f"❌ **Error:** {str(e)[:100]}")
 
 
-@Client.on_message(filters.command("listabuse") & filters.group)
+@app.on_message(filters.command("listabuse") & filters.group)
 async def listabuse_command(client: Client, message: Message):
     """List all abusive words"""
     try:
@@ -669,15 +561,13 @@ async def listabuse_command(client: Client, message: Message):
         if not words:
             return await message.reply_text("❌ **No abusive words configured**")
         
-        # Format as list
         word_list = []
         for i, w in enumerate(words, 1):
             word_list.append(f"{i}. `{w.get('word')}` ({w.get('severity', 'high')})")
         
-        text = f"📋 **Abusive Words List** ({len(words)} total)\n\n"
+        text = f"📋 **Abusive Words** ({len(words)})\n\n"
         text += "\n".join(word_list)
         
-        # Split if too long
         if len(text) > 4000:
             text = text[:3997] + "..."
         
@@ -688,7 +578,7 @@ async def listabuse_command(client: Client, message: Message):
         await message.reply_text(f"❌ **Error:** {str(e)[:100]}")
 
 
-@Client.on_message(filters.command("abusetest") & filters.group)
+@app.on_message(filters.command("abusetest") & filters.group)
 async def abusetest_command(client: Client, message: Message):
     """Test abuse detection"""
     try:
@@ -708,7 +598,7 @@ async def abusetest_command(client: Client, message: Message):
         )
         
         if is_detected:
-            await message.reply_text(f"🚫 **Abuse detected!**\n\nMatched word: `{matched_word}`")
+            await message.reply_text(f"🚫 **Abuse detected!**\n\nMatched: `{matched_word}`")
         else:
             await message.reply_text("✅ **No abuse detected**")
     
@@ -717,14 +607,13 @@ async def abusetest_command(client: Client, message: Message):
         await message.reply_text(f"❌ **Error:** {str(e)[:100]}")
 
 
-@Client.on_message(filters.command("abuseinfo") & filters.group)
+@app.on_message(filters.command("abuseinfo") & filters.group)
 async def abuseinfo_command(client: Client, message: Message):
     """Get user abuse info"""
     try:
         if not abuse_words_db:
             return await message.reply_text("❌ **Database not initialized**")
         
-        # Get reply message user
         if message.reply_to_message and message.reply_to_message.from_user:
             user_id = message.reply_to_message.from_user.id
             username = message.reply_to_message.from_user.first_name
@@ -738,14 +627,14 @@ async def abuseinfo_command(client: Client, message: Message):
         
         info_text = (
             f"📊 **Abuse Info - {username}**\n\n"
-            f"**Total Warnings:** {history.get('warnings', 0)}\n"
-            f"**First Offense:** {history.get('first_offense', 'N/A')}\n"
-            f"**Last Offense:** {history.get('last_offense', 'N/A')}\n"
+            f"**Warnings:** {history.get('warnings', 0)}\n"
+            f"**First:** {history.get('first_offense', 'N/A')}\n"
+            f"**Last:** {history.get('last_offense', 'N/A')}\n"
         )
         
         offenses = history.get('offenses', [])
         if offenses:
-            info_text += f"\n**Recent Violations:**\n"
+            info_text += f"\n**Recent:**\n"
             for i, offense in enumerate(offenses[-5:], 1):
                 word = offense.get('word', 'unknown')
                 info_text += f"{i}. `{word}`\n"
