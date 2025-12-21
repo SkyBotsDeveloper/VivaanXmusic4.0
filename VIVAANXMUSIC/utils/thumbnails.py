@@ -15,63 +15,48 @@ META_FONT_PATH = "VIVAANXMUSIC/assets/thumb/font.ttf"
 # Canvas dimensions
 CANVAS_W, CANVAS_H = 1280, 720
 
-# Left card (YouTube thumbnail card)
-LEFT_CARD_X = 50
-LEFT_CARD_Y = 120
-LEFT_CARD_W, LEFT_CARD_H = 550, 480
-LEFT_CARD_RADIUS = 20
+# Left sidebar panel (white with icons)
+LEFT_PANEL_X = 20
+LEFT_PANEL_Y = 130
+LEFT_PANEL_W, LEFT_PANEL_H = 100, 460
+LEFT_PANEL_RADIUS = 20
+LEFT_PANEL_COLOR = (255, 255, 255)
 
-# Right card (Player card)
-RIGHT_CARD_X = 640
-RIGHT_CARD_Y = 120
-RIGHT_CARD_W, RIGHT_CARD_H = 590, 480
-RIGHT_CARD_RADIUS = 20
-RIGHT_CARD_COLOR = (255, 255, 255)
+# Center thumbnail card (YouTube video)
+CENTER_CARD_X = 140
+CENTER_CARD_Y = 80
+CENTER_CARD_W, CENTER_CARD_H = 500, 560
+CENTER_CARD_RADIUS = 30
+CENTER_CARD_COLOR = (0, 0, 0)
 
-# Thumbnail circles
-YOUTUBE_THUMB_RADIUS = 140
-YOUTUBE_THUMB_X = LEFT_CARD_X + 50
-YOUTUBE_THUMB_Y = LEFT_CARD_Y + 80
+# Right sidebar panel (white with song info)
+RIGHT_PANEL_X = 1160
+RIGHT_PANEL_Y = 130
+RIGHT_PANEL_W, RIGHT_PANEL_H = 100, 460
+RIGHT_PANEL_RADIUS = 20
+RIGHT_PANEL_COLOR = (255, 255, 255)
 
-USER_DP_RADIUS = 85
-USER_DP_X = RIGHT_CARD_X + 35
-USER_DP_Y = RIGHT_CARD_Y + 60
+# Left panel icon positions
+ICON_X = LEFT_PANEL_X + 35
+HEART_ICON_Y = LEFT_PANEL_Y + 50
+PLUS_ICON_Y = LEFT_PANEL_Y + 200
+SHARE_ICON_Y = LEFT_PANEL_Y + 350
 
-# Text positioning (right card)
-TITLE_X = RIGHT_CARD_X + 250
-TITLE_Y = RIGHT_CARD_Y + 40
+# Right panel text positioning
+TITLE_X = RIGHT_PANEL_X + 10
+TITLE_Y = RIGHT_PANEL_Y + 30
+ARTIST_X = RIGHT_PANEL_X + 10
+ARTIST_Y = RIGHT_PANEL_Y + 80
 
-META_START_X = RIGHT_CARD_X + 250
-CHANNEL_Y = RIGHT_CARD_Y + 100
-VIEWS_Y = RIGHT_CARD_Y + 135
-DURATION_Y = RIGHT_CARD_Y + 170
+# Progress bar (right panel)
+PROGRESS_X = RIGHT_PANEL_X + 5
+PROGRESS_Y = RIGHT_PANEL_Y + 130
+PROGRESS_W = 90
+PROGRESS_H = 3
 
-# Progress bar
-PROGRESS_X = RIGHT_CARD_X + 250
-PROGRESS_Y = RIGHT_CARD_Y + 220
-PROGRESS_W = 310
-PROGRESS_H = 4
-
-# Time indicators
-TIME_X_START = RIGHT_CARD_X + 250
-TIME_X_END = RIGHT_CARD_X + 520
-TIME_Y = RIGHT_CARD_Y + 245
-
-# Control buttons
-BUTTON_Y = RIGHT_CARD_Y + 310
-BUTTON_SPACING = 65
-BUTTONS = [
-    {"label": "🔀", "x": RIGHT_CARD_X + 60},
-    {"label": "⏮", "x": RIGHT_CARD_X + 125},
-    {"label": "▶", "x": RIGHT_CARD_X + 190, "is_play": True},
-    {"label": "⏭", "x": RIGHT_CARD_X + 320},
-    {"label": "🔁", "x": RIGHT_CARD_X + 385},
-]
-
-# Volume bars
-VOLUME_BAR_START_X = RIGHT_CARD_X + 50
-VOLUME_BAR_Y = RIGHT_CARD_Y + 410
-VOLUME_BARS_COUNT = 7
+# Control buttons (right panel)
+BUTTON_Y = RIGHT_PANEL_Y + 180
+BUTTON_SIZE = 18
 
 def load_font(font_path: str, size: int) -> ImageFont.FreeTypeFont:
     """Load font with fallback to default."""
@@ -97,22 +82,13 @@ def create_circular_mask(size: int) -> Image.Image:
     draw.ellipse((0, 0, size, size), fill=255)
     return mask
 
-def extract_dominant_color(image: Image.Image) -> tuple:
-    """Extract dominant color from image."""
-    img = image.resize((10, 10))
-    pixels = img.getdata()
-    r = sum(p[0] if isinstance(p, tuple) else p for p in pixels) // len(pixels)
-    g = sum(p[1] if isinstance(p, tuple) else p for p in pixels) // len(pixels)
-    b = sum(p[2] if isinstance(p, tuple) else p for p in pixels) // len(pixels)
-    return (r, g, b)
-
 async def get_thumb(videoid: str, user_id: int = None) -> str:
     """
-    Generate a professional music player thumbnail.
+    Generate a professional music player thumbnail - Spotify style.
     
     Args:
         videoid: YouTube video ID
-        user_id: Telegram user ID (optional, uses bot DP as fallback)
+        user_id: Telegram user ID (optional)
     
     Returns:
         Path to the generated thumbnail
@@ -134,18 +110,13 @@ async def get_thumb(videoid: str, user_id: int = None) -> str:
         title = re.sub(r"\W+", " ", data.get("title", "Unsupported Title")).strip()
         thumbnail_url = data.get("thumbnails", [{}])[0].get("url", YOUTUBE_IMG_URL)
         duration = data.get("duration", "00:00")
-        views = data.get("viewCount", {}).get("short", "Unknown")
         channel = data.get("channel", {}).get("name", "YouTube")
     
-    except Exception as e:
+    except Exception:
         return YOUTUBE_IMG_URL
-
-    is_live = not duration or str(duration).strip().lower() in {"", "live", "live now"}
-    duration_text = "Live" if is_live else duration
 
     # === DOWNLOAD IMAGES ===
     thumb_path = os.path.join(CACHE_DIR, f"thumb_{videoid}.png")
-    user_dp_path = os.path.join(CACHE_DIR, f"dp_{user_id}.png")
     
     # Download YouTube thumbnail
     try:
@@ -157,19 +128,6 @@ async def get_thumb(videoid: str, user_id: int = None) -> str:
     except Exception:
         return YOUTUBE_IMG_URL
 
-    # Download user DP (if provided)
-    try:
-        from pyrogram import Client
-        from VIVAANXMUSIC import app
-        
-        if user_id:
-            user = await app.get_users(user_id)
-            photo = await app.download_media(user.photo.file_id, file_name=user_dp_path)
-        else:
-            photo = None
-    except Exception:
-        photo = None
-
     # === CREATE BASE IMAGE ===
     try:
         youtube_thumb = Image.open(thumb_path).convert("RGB")
@@ -177,154 +135,100 @@ async def get_thumb(videoid: str, user_id: int = None) -> str:
         return YOUTUBE_IMG_URL
 
     # Blur and darken background
-    blurred = youtube_thumb.resize((CANVAS_W, CANVAS_H)).filter(ImageFilter.GaussianBlur(15))
-    darkened = ImageEnhance.Brightness(blurred).enhance(0.4)
+    blurred = youtube_thumb.resize((CANVAS_W, CANVAS_H)).filter(ImageFilter.GaussianBlur(20))
+    darkened = ImageEnhance.Brightness(blurred).enhance(0.3)
     
-    # Create white background
-    bg = Image.new("RGB", (CANVAS_W, CANVAS_H), (20, 20, 25))
+    # Create base with dark background
+    bg = Image.new("RGB", (CANVAS_W, CANVAS_H), (40, 40, 45))
     bg.paste(darkened, (0, 0))
 
-    # === DRAW RIGHT CARD (Player) ===
     draw = ImageDraw.Draw(bg)
-    
-    # Right card background (white rounded rectangle)
+
+    # === DRAW LEFT SIDEBAR PANEL ===
     draw.rounded_rectangle(
-        [(RIGHT_CARD_X, RIGHT_CARD_Y), (RIGHT_CARD_X + RIGHT_CARD_W, RIGHT_CARD_Y + RIGHT_CARD_H)],
-        radius=RIGHT_CARD_RADIUS,
-        fill=RIGHT_CARD_COLOR
+        [(LEFT_PANEL_X, LEFT_PANEL_Y), (LEFT_PANEL_X + LEFT_PANEL_W, LEFT_PANEL_Y + LEFT_PANEL_H)],
+        radius=LEFT_PANEL_RADIUS,
+        fill=LEFT_PANEL_COLOR
+    )
+
+    # === DRAW CENTER THUMBNAIL CARD ===
+    # Black border/frame
+    draw.rounded_rectangle(
+        [(CENTER_CARD_X, CENTER_CARD_Y), (CENTER_CARD_X + CENTER_CARD_W, CENTER_CARD_Y + CENTER_CARD_H)],
+        radius=CENTER_CARD_RADIUS,
+        fill=CENTER_CARD_COLOR
+    )
+
+    # Add YouTube thumbnail inside the card
+    try:
+        # Load and resize thumbnail to fit inside card with padding
+        thumb_inner_w, thumb_inner_h = 460, 290
+        thumb_inner_x = CENTER_CARD_X + (CENTER_CARD_W - thumb_inner_w) // 2
+        thumb_inner_y = CENTER_CARD_Y + 60
+        
+        yt_img = youtube_thumb.resize((thumb_inner_w, thumb_inner_h))
+        bg.paste(yt_img, (thumb_inner_x, thumb_inner_y))
+    except Exception:
+        pass
+
+    # === DRAW RIGHT SIDEBAR PANEL ===
+    draw.rounded_rectangle(
+        [(RIGHT_PANEL_X, RIGHT_PANEL_Y), (RIGHT_PANEL_X + RIGHT_PANEL_W, RIGHT_PANEL_Y + RIGHT_PANEL_H)],
+        radius=RIGHT_PANEL_RADIUS,
+        fill=RIGHT_PANEL_COLOR
     )
 
     # === LOAD FONTS ===
-    title_font = load_font(TITLE_FONT_PATH, 28)
-    meta_font = load_font(META_FONT_PATH, 16)
-    button_font = load_font(TITLE_FONT_PATH, 24)
-    time_font = load_font(META_FONT_PATH, 14)
+    title_font = load_font(TITLE_FONT_PATH, 14)
+    artist_font = load_font(META_FONT_PATH, 12)
+    control_font = load_font(TITLE_FONT_PATH, 12)
 
-    # === DRAW CIRCLES ===
-    # YouTube thumbnail circle (left side)
-    youtube_circle_size = YOUTUBE_THUMB_RADIUS * 2
-    youtube_circle = Image.new("RGBA", (youtube_circle_size, youtube_circle_size), (0, 0, 0, 0))
+    # === DRAW LEFT PANEL ICONS ===
+    # Heart icon
+    draw.text((ICON_X - 8, HEART_ICON_Y), "♥", fill=(200, 100, 100), font=control_font)
     
-    # Draw white border
-    circle_draw = ImageDraw.Draw(youtube_circle)
-    circle_draw.ellipse((0, 0, youtube_circle_size - 1, youtube_circle_size - 1), fill=(255, 255, 255))
+    # Plus icon
+    draw.text((ICON_X - 6, PLUS_ICON_Y), "+", fill=(100, 100, 100), font=control_font)
     
-    # Paste thumbnail inside circle
-    try:
-        yt_img = Image.open(thumb_path).resize((youtube_circle_size - 8, youtube_circle_size - 8)).convert("RGB")
-        yt_mask = create_circular_mask(youtube_circle_size - 8)
-        youtube_circle.paste(yt_img, (4, 4), yt_mask)
-    except Exception:
-        pass
-    
-    bg.paste(youtube_circle, (YOUTUBE_THUMB_X - YOUTUBE_THUMB_RADIUS, YOUTUBE_THUMB_Y - YOUTUBE_THUMB_RADIUS), youtube_circle)
+    # Share icon
+    draw.text((ICON_X - 6, SHARE_ICON_Y), "⬆", fill=(100, 100, 100), font=control_font)
 
-    # User DP circle (right side of card)
-    user_circle_size = USER_DP_RADIUS * 2
-    user_circle = Image.new("RGBA", (user_circle_size, user_circle_size), (0, 0, 0, 0))
-    
-    # Draw border
-    user_draw = ImageDraw.Draw(user_circle)
-    user_draw.ellipse((0, 0, user_circle_size - 1, user_circle_size - 1), fill=(100, 180, 220))
-    
-    # Paste user DP inside circle
-    if photo and os.path.exists(photo):
-        try:
-            user_img = Image.open(photo).resize((user_circle_size - 6, user_circle_size - 6)).convert("RGB")
-            user_mask = create_circular_mask(user_circle_size - 6)
-            user_circle.paste(user_img, (3, 3), user_mask)
-        except Exception:
-            pass
-    
-    bg.paste(user_circle, (USER_DP_X - USER_DP_RADIUS, USER_DP_Y - USER_DP_RADIUS), user_circle)
-
-    # === DRAW TEXT (Right Card) ===
+    # === DRAW RIGHT PANEL INFO ===
     # Title
-    title_trimmed = trim_text(title, title_font, 280)
+    title_trimmed = trim_text(title, title_font, 80)
     draw.text((TITLE_X, TITLE_Y), title_trimmed, fill=(0, 0, 0), font=title_font)
 
-    # Metadata
-    draw.text((META_START_X, CHANNEL_Y), f"Channel: {channel[:25]}", fill=(80, 80, 80), font=meta_font)
-    draw.text((META_START_X, VIEWS_Y), f"Views: {views}", fill=(80, 80, 80), font=meta_font)
-    draw.text((META_START_X, DURATION_Y), f"Duration: {duration_text}", fill=(80, 80, 80), font=meta_font)
+    # Artist/Channel
+    artist_trimmed = trim_text(channel, artist_font, 80)
+    draw.text((ARTIST_X, ARTIST_Y), artist_trimmed, fill=(100, 100, 100), font=artist_font)
 
-    # === PROGRESS BAR ===
-    # Gray background bar
+    # === PROGRESS BAR (RIGHT PANEL) ===
+    # Gray background
     draw.rectangle(
         [(PROGRESS_X, PROGRESS_Y), (PROGRESS_X + PROGRESS_W, PROGRESS_Y + PROGRESS_H)],
         fill=(220, 220, 220)
     )
     
-    # Red progress (60%)
-    progress_amount = int(PROGRESS_W * 0.6)
+    # Black progress (30%)
+    progress_amount = int(PROGRESS_W * 0.3)
     draw.rectangle(
         [(PROGRESS_X, PROGRESS_Y), (PROGRESS_X + progress_amount, PROGRESS_Y + PROGRESS_H)],
-        fill=(255, 80, 80)
+        fill=(0, 0, 0)
     )
+
+    # === CONTROL BUTTONS (RIGHT PANEL) ===
+    buttons_info = [
+        {"label": "⏮", "x": RIGHT_PANEL_X + 20},
+        {"label": "⏸", "x": RIGHT_PANEL_X + 50},
+        {"label": "⏭", "x": RIGHT_PANEL_X + 80},
+    ]
     
-    # Progress indicator circle
-    circle_x = PROGRESS_X + progress_amount
-    draw.ellipse(
-        [(circle_x - 6, PROGRESS_Y - 4), (circle_x + 6, PROGRESS_Y + PROGRESS_H + 4)],
-        fill=(255, 80, 80)
-    )
-
-    # === TIME INDICATORS ===
-    draw.text((TIME_X_START, TIME_Y), "00:00", fill=(80, 80, 80), font=time_font)
-    draw.text((TIME_X_END - 30, TIME_Y), duration_text, fill=(255, 80, 80), font=time_font)
-
-    # === CONTROL BUTTONS ===
-    for button in BUTTONS:
-        x = button["x"]
-        is_play = button.get("is_play", False)
-        
-        # Button background circle
-        button_radius = 28 if is_play else 20
-        button_color = (100, 180, 220) if is_play else (240, 240, 240)
-        
-        draw.ellipse(
-            [(x - button_radius, BUTTON_Y - button_radius), (x + button_radius, BUTTON_Y + button_radius)],
-            fill=button_color
-        )
-        
-        # Button text
-        text_color = (255, 255, 255) if is_play else (0, 0, 0)
-        btn_font = load_font(TITLE_FONT_PATH, 26 if is_play else 20)
-        
-        # Center text in button
-        bbox = draw.textbbox((0, 0), button["label"], font=btn_font)
-        text_w = bbox[2] - bbox[0]
-        text_h = bbox[3] - bbox[1]
-        text_x = x - text_w // 2
-        text_y = BUTTON_Y - text_h // 2
-        
-        draw.text((text_x, text_y), button["label"], fill=text_color, font=btn_font)
-
-    # === VOLUME BARS ===
-    bar_heights = [25, 35, 50, 65, 50, 35, 25]  # Waveform pattern
-    for i, height in enumerate(bar_heights):
-        bar_x = VOLUME_BAR_START_X + (i * 18)
-        bar_y_top = VOLUME_BAR_Y - (height // 2)
-        bar_y_bottom = VOLUME_BAR_Y + (height // 2)
-        
-        draw.rectangle(
-            [(bar_x, bar_y_top), (bar_x + 10, bar_y_bottom)],
-            fill=(100, 180, 220)
-        )
-
-    # === BRANDING ===
-    branding_font = load_font(TITLE_FONT_PATH, 16)
-    draw.text((LEFT_CARD_X + 20, 20), "Elite Musics", fill=(255, 255, 255), font=branding_font)
+    for button in buttons_info:
+        draw.text((button["x"] - 6, BUTTON_Y), button["label"], fill=(100, 100, 100), font=control_font)
 
     # === CLEANUP & SAVE ===
     try:
         os.remove(thumb_path)
-    except OSError:
-        pass
-    
-    try:
-        if photo and os.path.exists(photo):
-            os.remove(photo)
     except OSError:
         pass
 
