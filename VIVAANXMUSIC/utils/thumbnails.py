@@ -2,7 +2,7 @@ import os
 import re
 import aiofiles
 import aiohttp
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 from youtubesearchpython.__future__ import VideosSearch
 from config import YOUTUBE_IMG_URL
 from VIVAANXMUSIC.core.dir import CACHE_DIR 
@@ -46,17 +46,21 @@ TIME_OFFSET_Y = 25
 
 def trim_to_width(text: str, font: ImageFont.FreeTypeFont, max_w: int) -> str:
     ellipsis = "…"
-    if hasattr(font, 'getlength') and font.getlength(text) <= max_w:
-        return text
-    # Fallback for older PIL versions
-    bbox = font.getbbox(text)
-    text_width = bbox[2] - bbox[0]
+    # Try getlength first (newer PIL), fallback to getbbox (older PIL)
+    if hasattr(font, 'getlength'):
+        text_width = font.getlength(text)
+    else:
+        bbox = font.getbbox(text)
+        text_width = bbox[2] - bbox[0]
     if text_width <= max_w:
         return text
     for i in range(len(text) - 1, 0, -1):
         trimmed = text[:i] + ellipsis
-        bbox_trim = font.getbbox(trimmed)
-        trim_width = bbox_trim[2] - bbox_trim[0]
+        if hasattr(font, 'getlength'):
+            trim_width = font.getlength(trimmed)
+        else:
+            bbox_trim = font.getbbox(trimmed)
+            trim_width = bbox_trim[2] - bbox_trim[0]
         if trim_width <= max_w:
             return trimmed
     return ellipsis
