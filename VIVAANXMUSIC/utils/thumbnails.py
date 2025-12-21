@@ -7,218 +7,393 @@ from youtubesearchpython.__future__ import VideosSearch
 from config import YOUTUBE_IMG_URL
 from VIVAANXMUSIC.core.dir import CACHE_DIR
 
-# === FONT PATHS ===
+# ============================================================================
+#                          FONT PATHS (CONSTANTS)
+# ============================================================================
 TITLE_FONT_PATH = "VIVAANXMUSIC/assets/thumb/font2.ttf"
 META_FONT_PATH = "VIVAANXMUSIC/assets/thumb/font.ttf"
 
-# === DESIGN CONSTANTS ===
+# ============================================================================
+#                    DESIGN SYSTEM - GRID & LAYOUT (720p)
+# ============================================================================
+# Canvas dimensions (standard YouTube thumbnail aspect ratio friendly)
 CANVAS_W, CANVAS_H = 1280, 720
 
-# Left sidebar panel (white)
+# ============================================================================
+#                        LEFT SIDEBAR PANEL (WHITE)
+# ============================================================================
 LEFT_PANEL_X = 30
 LEFT_PANEL_Y = 150
-LEFT_PANEL_W, LEFT_PANEL_H = 90, 420
+LEFT_PANEL_W = 90
+LEFT_PANEL_H = 420
 LEFT_PANEL_RADIUS = 15
 LEFT_PANEL_COLOR = (255, 255, 255)
 
-# Center thumbnail card (black background)
-CENTER_CARD_X = 160
+# Left panel icon positions (vertical centering: 420 / 4 = 105px spacing)
+ICON_CENTER_X = LEFT_PANEL_X + (LEFT_PANEL_W // 2)
+HEART_ICON_Y = LEFT_PANEL_Y + 50          # First icon
+PLUS_ICON_Y = LEFT_PANEL_Y + 190          # Second icon (offset)
+SHARE_ICON_Y = LEFT_PANEL_Y + 330         # Third icon (offset)
+
+# ============================================================================
+#                   CENTER THUMBNAIL CARD (BLACK FRAME)
+# ============================================================================
+CENTER_CARD_X = 280
 CENTER_CARD_Y = 100
-CENTER_CARD_W, CENTER_CARD_H = 500, 520
-CENTER_CARD_RADIUS = 25
+CENTER_CARD_W = 420
+CENTER_CARD_H = 520
+CENTER_CARD_RADIUS = 30
 CENTER_CARD_COLOR = (0, 0, 0)
 
-# Right sidebar panel (white)
+# YouTube thumbnail inside center card (with padding)
+THUMB_INNER_W = 350
+THUMB_INNER_H = 220
+THUMB_INNER_X = CENTER_CARD_X + (CENTER_CARD_W - THUMB_INNER_W) // 2  # Centered
+THUMB_INNER_Y = CENTER_CARD_Y + 70                                     # Positioned from top
+
+# ============================================================================
+#                       RIGHT SIDEBAR PANEL (WHITE)
+# ============================================================================
 RIGHT_PANEL_X = 1160
 RIGHT_PANEL_Y = 150
-RIGHT_PANEL_W, RIGHT_PANEL_H = 90, 420
+RIGHT_PANEL_W = 90
+RIGHT_PANEL_H = 420
 RIGHT_PANEL_RADIUS = 15
 RIGHT_PANEL_COLOR = (255, 255, 255)
 
-# Left panel icon positions (vertical)
-ICON_X = LEFT_PANEL_X + 30
-HEART_Y = LEFT_PANEL_Y + 40
-PLUS_Y = LEFT_PANEL_Y + 190
-SHARE_Y = LEFT_PANEL_Y + 340
-
-# Right panel positions
+# Right panel content positioning
 TITLE_X = RIGHT_PANEL_X + 10
-TITLE_Y = RIGHT_PANEL_Y + 25
+TITLE_Y = RIGHT_PANEL_Y + 20
 ARTIST_X = RIGHT_PANEL_X + 10
 ARTIST_Y = RIGHT_PANEL_Y + 65
 
-# Progress bar
-PROGRESS_X = RIGHT_PANEL_X + 5
+# Progress bar (horizontal line inside right panel)
+PROGRESS_X = RIGHT_PANEL_X + 8
 PROGRESS_Y = RIGHT_PANEL_Y + 120
-PROGRESS_W = 80
-PROGRESS_H = 3
+PROGRESS_W = 74
+PROGRESS_H = 2
 
-# Control buttons (bottom right)
-BUTTON_Y = RIGHT_PANEL_Y + 170
-BUTTON_SPACING = 22
+# Control buttons (bottom of right panel)
+BUTTON_Y = RIGHT_PANEL_Y + 175
+BUTTON_X_1 = RIGHT_PANEL_X + 15      # Previous button
+BUTTON_X_2 = RIGHT_PANEL_X + 40      # Play button
+BUTTON_X_3 = RIGHT_PANEL_X + 65      # Next button
+
+# ============================================================================
+#                            UTILITY FUNCTIONS
+# ============================================================================
 
 def load_font(font_path: str, size: int) -> ImageFont.FreeTypeFont:
-    """Load font with fallback."""
+    """
+    Load TrueType font with fallback to default if path not found.
+    
+    Args:
+        font_path: Path to .ttf file
+        size: Font size in pixels
+    
+    Returns:
+        ImageFont.FreeTypeFont or ImageFont.FreeTypeFont (default)
+    """
     try:
         return ImageFont.truetype(font_path, size)
-    except OSError:
+    except (OSError, IOError):
         return ImageFont.load_default()
 
-def trim_text(text: str, font: ImageFont.FreeTypeFont, max_w: int) -> str:
-    """Trim text to fit width."""
+def trim_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> str:
+    """
+    Trim text to fit within max_width using ellipsis.
+    
+    Args:
+        text: Text to trim
+        font: ImageFont object for measurement
+        max_width: Maximum pixel width
+    
+    Returns:
+        Trimmed text with ellipsis if needed
+    """
     ellipsis = "…"
-    if font.getlength(text) <= max_w:
+    
+    # If text fits, return as-is
+    if font.getlength(text) <= max_width:
         return text
+    
+    # Binary trim from end until it fits
     for i in range(len(text) - 1, 0, -1):
-        if font.getlength(text[:i] + ellipsis) <= max_w:
-            return text[:i] + ellipsis
+        candidate = text[:i] + ellipsis
+        if font.getlength(candidate) <= max_width:
+            return candidate
+    
     return ellipsis
+
+def draw_text_centered(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    x: int,
+    y: int,
+    font: ImageFont.FreeTypeFont,
+    fill: tuple = (0, 0, 0),
+    anchor: str = "lm"
+) -> None:
+    """
+    Draw text with optional centering.
+    
+    Args:
+        draw: ImageDraw object
+        text: Text to draw
+        x, y: Position
+        font: ImageFont object
+        fill: RGB color tuple
+        anchor: Alignment anchor ('lm' = left-middle, 'mm' = center-middle)
+    """
+    draw.text((x, y), text, font=font, fill=fill, anchor=anchor)
 
 async def get_thumb(videoid: str, user_id: int = None) -> str:
     """
-    Generate thumbnail - Meharbaan style with sidebars.
+    Generate professional music player thumbnail - Meharbaan style.
+    
+    Layout:
+    - Dark blurred background (YouTube thumbnail)
+    - Left white panel with heart, plus, share icons
+    - Center black card with YouTube thumbnail inside
+    - Right white panel with title, artist, progress, controls
     
     Args:
-        videoid: YouTube video ID
-        user_id: Telegram user ID (optional)
+        videoid: YouTube video ID (e.g., 'dQw4w9WgXcQ')
+        user_id: Telegram user ID for potential future use
     
     Returns:
-        Path to generated thumbnail
+        Path to saved thumbnail PNG file
     """
+    
+    # === CACHE CHECK ===
     cache_path = os.path.join(CACHE_DIR, f"{videoid}_{user_id}_elite.png")
     if os.path.exists(cache_path):
         return cache_path
 
-    # === FETCH VIDEO DATA ===
+    # =========================================================================
+    #                      FETCH VIDEO METADATA FROM YOUTUBE
+    # =========================================================================
     try:
         results = VideosSearch(f"https://www.youtube.com/watch?v={videoid}", limit=1)
         results_data = await results.next()
         result_items = results_data.get("result", [])
         
         if not result_items:
-            raise ValueError("No results")
+            raise ValueError("No YouTube video found")
         
         data = result_items[0]
+        
+        # Extract metadata with fallbacks
         title = re.sub(r"\W+", " ", data.get("title", "Unsupported Title")).strip()
         thumbnail_url = data.get("thumbnails", [{}])[0].get("url", YOUTUBE_IMG_URL)
         channel = data.get("channel", {}).get("name", "YouTube")
-    
+        duration = data.get("duration", "Unknown")
+        
     except Exception:
+        # If YouTube fetch fails, return default image
         return YOUTUBE_IMG_URL
 
-    # === DOWNLOAD THUMBNAIL ===
+    # =========================================================================
+    #                    DOWNLOAD YOUTUBE THUMBNAIL IMAGE
+    # =========================================================================
     thumb_path = os.path.join(CACHE_DIR, f"thumb_{videoid}.png")
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(thumbnail_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            async with session.get(
+                thumbnail_url, 
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
                 if resp.status == 200:
                     async with aiofiles.open(thumb_path, "wb") as f:
                         await f.write(await resp.read())
+                else:
+                    return YOUTUBE_IMG_URL
     except Exception:
         return YOUTUBE_IMG_URL
 
-    # === CREATE BASE IMAGE ===
+    # =========================================================================
+    #                        CREATE BASE IMAGE WITH BG
+    # =========================================================================
     try:
         youtube_thumb = Image.open(thumb_path).convert("RGB")
     except Exception:
         return YOUTUBE_IMG_URL
 
-    # Blur and darken background
-    blurred = youtube_thumb.resize((CANVAS_W, CANVAS_H)).filter(ImageFilter.GaussianBlur(25))
-    darkened = ImageEnhance.Brightness(blurred).enhance(0.35)
+    # Blur and darken YouTube thumbnail for background depth
+    blurred = youtube_thumb.resize((CANVAS_W, CANVAS_H)).filter(
+        ImageFilter.GaussianBlur(25)
+    )
+    darkened = ImageEnhance.Brightness(blurred).enhance(0.30)
     
-    # Create dark background
-    bg = Image.new("RGB", (CANVAS_W, CANVAS_H), (50, 50, 55))
+    # Start with dark base, then overlay darkened thumbnail
+    bg = Image.new("RGB", (CANVAS_W, CANVAS_H), (45, 45, 50))
     bg.paste(darkened, (0, 0))
-
+    
     draw = ImageDraw.Draw(bg)
 
-    # === DRAW LEFT SIDEBAR PANEL ===
+    # =========================================================================
+    #                   DRAW LEFT SIDEBAR PANEL (WHITE)
+    # =========================================================================
     draw.rounded_rectangle(
-        [(LEFT_PANEL_X, LEFT_PANEL_Y), (LEFT_PANEL_X + LEFT_PANEL_W, LEFT_PANEL_Y + LEFT_PANEL_H)],
+        xy=[
+            (LEFT_PANEL_X, LEFT_PANEL_Y),
+            (LEFT_PANEL_X + LEFT_PANEL_W, LEFT_PANEL_Y + LEFT_PANEL_H)
+        ],
         radius=LEFT_PANEL_RADIUS,
-        fill=LEFT_PANEL_COLOR
+        fill=LEFT_PANEL_COLOR,
+        width=0
     )
 
-    # === DRAW CENTER BLACK CARD ===
+    # =========================================================================
+    #                  DRAW CENTER THUMBNAIL CARD (BLACK)
+    # =========================================================================
     draw.rounded_rectangle(
-        [(CENTER_CARD_X, CENTER_CARD_Y), (CENTER_CARD_X + CENTER_CARD_W, CENTER_CARD_Y + CENTER_CARD_H)],
+        xy=[
+            (CENTER_CARD_X, CENTER_CARD_Y),
+            (CENTER_CARD_X + CENTER_CARD_W, CENTER_CARD_Y + CENTER_CARD_H)
+        ],
         radius=CENTER_CARD_RADIUS,
-        fill=CENTER_CARD_COLOR
+        fill=CENTER_CARD_COLOR,
+        width=0
     )
 
-    # Add YouTube thumbnail inside center card with padding
+    # Paste YouTube thumbnail inside center card
     try:
-        thumb_inner_w, thumb_inner_h = 380, 250
-        thumb_inner_x = CENTER_CARD_X + (CENTER_CARD_W - thumb_inner_w) // 2
-        thumb_inner_y = CENTER_CARD_Y + 50
-        
-        yt_img = youtube_thumb.resize((thumb_inner_w, thumb_inner_h))
-        bg.paste(yt_img, (thumb_inner_x, thumb_inner_y))
+        yt_img = youtube_thumb.resize((THUMB_INNER_W, THUMB_INNER_H))
+        bg.paste(yt_img, (THUMB_INNER_X, THUMB_INNER_Y))
     except Exception:
         pass
 
-    # === DRAW RIGHT SIDEBAR PANEL ===
+    # =========================================================================
+    #                   DRAW RIGHT SIDEBAR PANEL (WHITE)
+    # =========================================================================
     draw.rounded_rectangle(
-        [(RIGHT_PANEL_X, RIGHT_PANEL_Y), (RIGHT_PANEL_X + RIGHT_PANEL_W, RIGHT_PANEL_Y + RIGHT_PANEL_H)],
+        xy=[
+            (RIGHT_PANEL_X, RIGHT_PANEL_Y),
+            (RIGHT_PANEL_X + RIGHT_PANEL_W, RIGHT_PANEL_Y + RIGHT_PANEL_H)
+        ],
         radius=RIGHT_PANEL_RADIUS,
-        fill=RIGHT_PANEL_COLOR
+        fill=RIGHT_PANEL_COLOR,
+        width=0
     )
 
-    # === LOAD FONTS ===
-    title_font = load_font(TITLE_FONT_PATH, 13)
-    artist_font = load_font(META_FONT_PATH, 11)
-    control_font = load_font(TITLE_FONT_PATH, 11)
+    # =========================================================================
+    #                         LOAD FONTS & SIZES
+    # =========================================================================
+    title_font = load_font(TITLE_FONT_PATH, 12)       # Song title font
+    artist_font = load_font(META_FONT_PATH, 10)       # Artist name font
+    icon_font = load_font(TITLE_FONT_PATH, 14)        # Icon font
+    control_font = load_font(TITLE_FONT_PATH, 11)     # Button font
 
-    # === LEFT PANEL ICONS ===
-    # Heart
-    draw.text((ICON_X - 6, HEART_Y), "♥", fill=(200, 80, 80), font=control_font)
+    # =========================================================================
+    #               DRAW LEFT PANEL ICONS (HEART, PLUS, SHARE)
+    # =========================================================================
     
-    # Plus
-    draw.text((ICON_X - 5, PLUS_Y), "+", fill=(100, 100, 100), font=control_font)
-    
-    # Share/Upload
-    draw.text((ICON_X - 6, SHARE_Y), "⬆", fill=(100, 100, 100), font=control_font)
-
-    # === RIGHT PANEL INFO ===
-    # Title
-    title_trimmed = trim_text(title, title_font, 75)
-    draw.text((TITLE_X, TITLE_Y), title_trimmed, fill=(0, 0, 0), font=title_font)
-
-    # Artist/Channel
-    artist_trimmed = trim_text(channel, artist_font, 75)
-    draw.text((ARTIST_X, ARTIST_Y), artist_trimmed, fill=(120, 120, 120), font=artist_font)
-
-    # === PROGRESS BAR ===
-    # Gray background
-    draw.rectangle(
-        [(PROGRESS_X, PROGRESS_Y), (PROGRESS_X + PROGRESS_W, PROGRESS_Y + PROGRESS_H)],
-        fill=(200, 200, 200)
+    # Heart icon (red/pink color)
+    draw.text(
+        xy=(ICON_CENTER_X - 5, HEART_ICON_Y),
+        text="♥",
+        font=icon_font,
+        fill=(220, 80, 100),
+        anchor="mm"
     )
     
-    # Black progress (35%)
-    progress_amt = int(PROGRESS_W * 0.35)
-    draw.rectangle(
-        [(PROGRESS_X, PROGRESS_Y), (PROGRESS_X + progress_amt, PROGRESS_Y + PROGRESS_H)],
+    # Plus icon (gray)
+    draw.text(
+        xy=(ICON_CENTER_X - 4, PLUS_ICON_Y),
+        text="+",
+        font=icon_font,
+        fill=(120, 120, 120),
+        anchor="mm"
+    )
+    
+    # Share/Upload icon (gray)
+    draw.text(
+        xy=(ICON_CENTER_X - 5, SHARE_ICON_Y),
+        text="⬆",
+        font=icon_font,
+        fill=(120, 120, 120),
+        anchor="mm"
+    )
+
+    # =========================================================================
+    #            DRAW RIGHT PANEL CONTENT (TEXT & PROGRESS & BUTTONS)
+    # =========================================================================
+    
+    # Song Title
+    title_trimmed = trim_text(title, title_font, 70)
+    draw.text(
+        xy=(TITLE_X, TITLE_Y),
+        text=title_trimmed,
+        font=title_font,
         fill=(0, 0, 0)
     )
+    
+    # Artist/Channel name
+    artist_trimmed = trim_text(channel, artist_font, 70)
+    draw.text(
+        xy=(ARTIST_X, ARTIST_Y),
+        text=artist_trimmed,
+        font=artist_font,
+        fill=(140, 140, 140)
+    )
 
-    # === CONTROL BUTTONS (RIGHT PANEL) ===
+    # =========================================================================
+    #                    PROGRESS BAR (BLACK LINE)
+    # =========================================================================
+    
+    # Gray background bar
+    draw.rectangle(
+        xy=[
+            (PROGRESS_X, PROGRESS_Y),
+            (PROGRESS_X + PROGRESS_W, PROGRESS_Y + PROGRESS_H)
+        ],
+        fill=(200, 200, 200),
+        width=0
+    )
+    
+    # Black filled progress (35% filled)
+    progress_fill = int(PROGRESS_W * 0.35)
+    draw.rectangle(
+        xy=[
+            (PROGRESS_X, PROGRESS_Y),
+            (PROGRESS_X + progress_fill, PROGRESS_Y + PROGRESS_H)
+        ],
+        fill=(0, 0, 0),
+        width=0
+    )
+
+    # =========================================================================
+    #              CONTROL BUTTONS (PREVIOUS, PLAY, NEXT)
+    # =========================================================================
+    
     buttons = [
-        {"label": "⏮", "x": RIGHT_PANEL_X + 15},
-        {"label": "⏸", "x": RIGHT_PANEL_X + 37},
-        {"label": "⏭", "x": RIGHT_PANEL_X + 59},
+        {"symbol": "⏮", "x": BUTTON_X_1},   # Previous
+        {"symbol": "⏸", "x": BUTTON_X_2},   # Play/Pause
+        {"symbol": "⏭", "x": BUTTON_X_3},   # Next
     ]
     
     for btn in buttons:
-        draw.text((btn["x"] - 5, BUTTON_Y), btn["label"], fill=(100, 100, 100), font=control_font)
+        draw.text(
+            xy=(btn["x"] - 3, BUTTON_Y),
+            text=btn["symbol"],
+            font=control_font,
+            fill=(110, 110, 110),
+            anchor="mm"
+        )
 
-    # === CLEANUP ===
+    # =========================================================================
+    #                        CLEANUP & SAVE THUMBNAIL
+    # =========================================================================
+    
+    # Remove temporary YouTube thumbnail file
     try:
         os.remove(thumb_path)
     except OSError:
         pass
 
-    bg.save(cache_path, "PNG")
+    # Save final thumbnail as PNG
+    bg.save(cache_path, "PNG", quality=95)
+    
     return cache_path
