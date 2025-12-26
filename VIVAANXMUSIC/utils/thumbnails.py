@@ -1,247 +1,223 @@
 import os
 import re
+import textwrap
+import numpy as np
 import aiofiles
 import aiohttp
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
+from PIL import (
+    Image,
+    ImageDraw,
+    ImageEnhance,
+    ImageFilter,
+    ImageFont,
+)
 from youtubesearchpython.__future__ import VideosSearch
 from config import YOUTUBE_IMG_URL
-from VIVAANXMUSIC.core.dir import CACHE_DIR 
-
-# Dimensions adjusted to match the compact, vertical-ish design
-PANEL_W, PANEL_H = 380, 520  # Narrower and taller for the example
-PANEL_X = (1280 - PANEL_W) // 2 + 100  # Slightly offset to left for asymmetry
-PANEL_Y = (720 - PANEL_H) // 2
-TRANSPARENCY = 180  # Fine-tuned for frosted white panel
-INNER_OFFSET = 20
-PANEL_RADIUS = 25  # Softer rounded corners
-
-THUMB_W, THUMB_H = 340, 340  # Square thumbnail to match
-THUMB_X = PANEL_X + INNER_OFFSET
-THUMB_Y = PANEL_Y + INNER_OFFSET + 40  # Slightly lower to fit title space above
-THUMB_RADIUS = 20
-
-# Title overlay on thumbnail
-TITLE_OVERLAY_Y = THUMB_Y - 30  # Position for large song title on thumb
-ARTIST_OVERLAY_Y = TITLE_OVERLAY_Y + 50  # Artist below title on thumb
-
-# Panel content
-CHANNEL_Y = PANEL_Y + INNER_OFFSET + 10  # Channel at top
-ARTIST_PANEL_Y = THUMB_Y + THUMB_H + 20  # Artist repeat? But in example, artist is on thumb and panel
-SONG_PANEL_Y = ARTIST_PANEL_Y + 25  # Song title in panel below thumb? Wait, example has artist in panel
-
-# From example: Panel has "Darshan Raval ---" and "Haara" below? No, looking: Artist full, then song.
-# Adjust: Channel top, then artist below thumb, song below artist? But example shows artist prominent.
-
-# Vertical icons (left of panel, but in example right of thumb? Wait, left side)
-ICON_FONT_SIZE = 24
-ICON_X = PANEL_X - 40  # To the left of panel
-HEART_Y = THUMB_Y + 20
-ADD_Y = HEART_Y + 50
-UP_Y = ADD_Y + 50
-
-# Progress bar below song
-BAR_X = PANEL_X + INNER_OFFSET
-BAR_Y = SONG_PANEL_Y + 60
-BAR_RED_LEN = 180  # Adjusted for progress
-BAR_TOTAL_LEN = PANEL_W - 2 * INNER_OFFSET
-BAR_HEIGHT = 4
-DOT_RADIUS = 6
-PLAY_X = BAR_X + 40
-PLAY_Y = BAR_Y + BAR_HEIGHT // 2
-
-# Time offset
-TIME_OFFSET_Y = 25
-
-# Red tint for thumbnail
-RED_TINT = (255, 100, 100, 128)  # Semi-transparent red overlay for tint
-
-def trim_to_width(text: str, font: ImageFont.FreeTypeFont, max_w: int) -> str:
-    ellipsis = "…"
-    def get_text_width(t):
-        if hasattr(font, 'getlength'):
-            return font.getlength(t)
-        else:
-            bbox = font.getbbox(t)
-            return bbox[2] - bbox[0]
-    
-    text_width = get_text_width(text)
-    if text_width <= max_w:
-        return text
-    for i in range(len(text) - 1, 0, -1):
-        trimmed = text[:i] + ellipsis
-        trim_width = get_text_width(trimmed)
-        if trim_width <= max_w:
-            return trimmed
-    return ellipsis
-
-def draw_rounded_rectangle(draw: ImageDraw.ImageDraw, xy, radius: int, fill=None, outline=None, width=1):
-    """Helper to draw rounded rectangle."""
-    x1, y1, x2, y2 = xy
-    draw.rectangle([x1 + radius, y1, x2 - radius, y2], fill=fill, outline=outline, width=width)
-    draw.rectangle([x1, y1 + radius, x2, y2 - radius], fill=fill, outline=outline, width=width)
-    draw.pieslice([x1 + radius, y1 + radius, x1 + 2 * radius, y1 + 2 * radius], 180, 270, fill=fill, outline=outline, width=width)
-    draw.pieslice([x2 - 2 * radius, y1 + radius, x2 - radius, y1 + 2 * radius], 270, 360, fill=fill, outline=outline, width=width)
-    draw.pieslice([x1 + radius, y2 - 2 * radius, x1 + 2 * radius, y2 - radius], 90, 180, fill=fill, outline=outline, width=width)
-    draw.pieslice([x2 - 2 * radius, y2 - 2 * radius, x2 - radius, y2 - radius], 0, 90, fill=fill, outline=outline, width=width)
-
-async def get_thumb(videoid: str) -> str:
-    cache_path = os.path.join(CACHE_DIR, f"{videoid}_v7.png")  # New version
-    if os.path.exists(cache_path):
-        return cache_path
-
-    # Fetch data
-    results = VideosSearch(f"https://www.youtube.com/watch?v={videoid}", limit=1)
+ 
+ 
+def changeImageSize(maxWidth, maxHeight, image):
+    widthRatio = maxWidth / image.size[0]
+    heightRatio = maxHeight / image.size[1]
+    ratio = min(widthRatio, heightRatio)
+    newWidth = int(image.size[0] * ratio)
+    newHeight = int(image.size[1] * ratio)
     try:
-        results_data = await results.next()
-        result_items = results_data.get("result", [])
-        if not result_items:
-            raise ValueError("No results found.")
-        data = result_items[0]
-        title = data.get("title", "Unsupported Title")  # Song title
-        thumbnail = data.get("thumbnails", [{}])[0].get("url", YOUTUBE_IMG_URL)
-        duration = data.get("duration")
-        channel = data.get("channel", {}).get("name", "Unknown Channel")
-        # For song/artist split: simplistic - assume title is "Song - Artist" or use channel as artist
-        if " - " in title:
-            song_name, artist = title.split(" - ", 1)
-        else:
-            song_name = title
-            artist = channel
-    except Exception:
-        song_name, artist, thumbnail, duration, channel = "Unsupported Title", "Unknown Artist", YOUTUBE_IMG_URL, None, "Unknown Channel"
-
-    is_live = not duration or str(duration).strip().lower() in {"", "live", "live now"}
-    duration_text = "Live" if is_live else duration or "Unknown Mins"
-
-    # Download thumbnail
-    thumb_path = os.path.join(CACHE_DIR, f"thumb{videoid}.png")
-    thumb_downloaded = False
+        resample = Image.Resampling.LANCZOS
+    except AttributeError:
+        resample = Image.ANTIALIAS
+    return image.resize((newWidth, newHeight), resample)
+ 
+ 
+def get_dominant_color(image):
+    image = image.convert('RGB').resize((50, 50))
+    pixels = np.array(image).reshape(-1, 3)
+    avg_color = tuple(pixels.mean(axis=0).astype(int))
+    if sum(avg_color) < 200:
+        return tuple(min(255, int(c * 1.5)) for c in avg_color)
+    return avg_color
+ 
+ 
+def get_contrasting_color(bg_color):
+    luminance = (0.299 * bg_color[0] + 0.587 * bg_color[1] + 0.114 * bg_color[2])
+    return (255, 255, 255) if luminance < 128 else (50, 50, 50)
+ 
+ 
+async def get_thumb(videoid):
+    final_path = f"cache/{videoid}.png"
+    if os.path.isfile(final_path):
+        return final_path
+ 
+    url = f"https://www.youtube.com/watch?v={videoid}"
     try:
+        results = VideosSearch(url, limit=1)
+        result_data = await results.next()
+        if not result_data.get("result"):
+            return YOUTUBE_IMG_URL
+ 
+        result = result_data["result"][0]
+        title = re.sub(r"\W+", " ", result.get("title", "Unknown Title")).title()
+        duration = result.get("duration", "00:00")
+        thumbnail_url = result["thumbnails"][0]["url"].split("?")[0]
+        views = result.get("viewCount", {}).get("short", "0 views")
+        channel = result.get("channel", {}).get("name", "Unknown Channel")
+ 
+        os.makedirs("cache", exist_ok=True)
+        thumb_path = f"cache/thumb{videoid}.png"
+ 
         async with aiohttp.ClientSession() as session:
-            async with session.get(thumbnail) as resp:
-                if resp.status == 200:
-                    async with aiofiles.open(thumb_path, "wb") as f:
-                        await f.write(await resp.read())
-                    thumb_downloaded = True
-    except Exception:
-        pass
-
-    if not thumb_downloaded:
+            async with session.get(thumbnail_url) as resp:
+                async with aiofiles.open(thumb_path, "wb") as f:
+                    await f.write(await resp.read())
+ 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(YOUTUBE_IMG_URL) as resp:
-                    if resp.status == 200:
-                        async with aiofiles.open(thumb_path, "wb") as f:
-                            await f.write(await resp.read())
-        except Exception:
+            youtube = Image.open(thumb_path)
+        except:
+            os.remove(thumb_path) if os.path.exists(thumb_path) else None
+            return YOUTUBE_IMG_URL
+ 
+        full_bg = changeImageSize(1280, 720, youtube.copy()).convert("RGBA")
+        blurred_bg = full_bg.filter(ImageFilter.GaussianBlur(48))
+        bar_color = get_dominant_color(blurred_bg)
+        accent = tuple(min(255, int(c * 1.25) + 20) for c in bar_color)
+        contrast_color = get_contrasting_color(bar_color)
+ 
+        enhancer_b = ImageEnhance.Brightness(blurred_bg).enhance(0.6)
+        enhancer_c = ImageEnhance.Color(enhancer_b).enhance(0.95)
+        bg = enhancer_c
+ 
+        color_overlay = Image.new("RGBA", bg.size, (accent[0], accent[1], accent[2], 140))
+        bg = Image.alpha_composite(bg, color_overlay)
+ 
+        subtle_frost = Image.new("RGBA", bg.size, (255, 255, 255, 12))
+        bg = Image.alpha_composite(bg, subtle_frost)
+ 
+        glass_layer = Image.new("RGBA", bg.size, (0, 0, 0, 0))
+        glass_size = (int(bg.width * 0.78), int(bg.height * 0.62))
+        glass = Image.new("RGBA", glass_size, (accent[0], accent[1], accent[2], 28))
+        glass = glass.filter(ImageFilter.GaussianBlur(34))
+        glass_pos = ((bg.width - glass.width) // 2, (bg.height - glass.height) // 2 - 10)
+        glass_layer.paste(glass, glass_pos, glass)
+        bg = Image.alpha_composite(bg, glass_layer)
+ 
+        depth_tint = Image.new("RGBA", bg.size, (0, 0, 0, 28))
+        bg = Image.alpha_composite(bg, depth_tint)
+ 
+        center_thumb = changeImageSize(940, 420, youtube.copy()).convert("RGBA")
+        thumb_pos = ((bg.width - center_thumb.width) // 2, 90)
+ 
+        enhancer_brightness = ImageEnhance.Brightness(center_thumb).enhance(1.05)
+        enhancer_contrast = ImageEnhance.Contrast(enhancer_brightness).enhance(1.18)
+        center_thumb = enhancer_contrast
+ 
+        glow_layer = Image.new("RGBA", bg.size, (0, 0, 0, 0))
+        glow_size = (center_thumb.width + 140, center_thumb.height + 140)
+        glow = Image.new("RGBA", glow_size, (bar_color[0], bar_color[1], bar_color[2], 80))
+        glow = glow.filter(ImageFilter.GaussianBlur(54))
+        glow_pos = (thumb_pos[0] - 70, thumb_pos[1] - 70)
+        glow_layer.paste(glow, glow_pos, glow)
+        bg = Image.alpha_composite(bg, glow_layer)
+ 
+        mask = Image.new("L", center_thumb.size, 0)
+        draw_mask = ImageDraw.Draw(mask)
+        draw_mask.rounded_rectangle([0, 0, center_thumb.width, center_thumb.height], radius=40, fill=255)
+        bg.paste(center_thumb, thumb_pos, mask)
+ 
+        thirty = 30
+        panel_box = (
+            thumb_pos[0] - thirty,
+            thumb_pos[1] - thirty,
+            thumb_pos[0] + center_thumb.width + thirty,
+            thumb_pos[1] + center_thumb.height + thirty,
+        )
+        left, top, right, bottom = panel_box
+        left = max(0, left)
+        top = max(0, top)
+        right = min(bg.width, right)
+        bottom = min(bg.height, bottom)
+ 
+        cropped = bg.crop((left, top, right, bottom)).convert("RGBA")
+        blurred_panel = cropped.filter(ImageFilter.GaussianBlur(22))
+        white_overlay = Image.new("RGBA", blurred_panel.size, (255, 255, 255, 50))
+        blended_panel = Image.alpha_composite(blurred_panel, white_overlay)
+ 
+        panel_mask = Image.new("L", blended_panel.size, 0)
+        pm_draw = ImageDraw.Draw(panel_mask)
+        pm_draw.rounded_rectangle([0, 0, blended_panel.width, blended_panel.height], radius=40, fill=255)
+ 
+        panel_canvas = Image.new("RGBA", bg.size, (0, 0, 0, 0))
+        panel_canvas.paste(blended_panel, (left, top), panel_mask)
+ 
+        border_draw = ImageDraw.Draw(panel_canvas)
+        border_draw.rounded_rectangle([left, top, right, bottom], radius=40, outline=(255, 255, 255, 70), width=2)
+ 
+        bg = Image.alpha_composite(bg, panel_canvas)
+ 
+        mask = Image.new("L", center_thumb.size, 0)
+        draw_mask = ImageDraw.Draw(mask)
+        draw_mask.rounded_rectangle([0, 0, center_thumb.width, center_thumb.height], radius=40, fill=255)
+        bg.paste(center_thumb, thumb_pos, mask)
+ 
+        def safe_font(path, size):
+            try:
+                return ImageFont.truetype(path, size)
+            except:
+                return ImageFont.load_default()
+ 
+        font_title = safe_font("VIVAANXMUSIC/assets/thumb/font2.ttf", 32)
+        font_small = safe_font("VIVAANXMUSIC/assets/thumb/font.ttf", 28)
+        font_brand = safe_font("VIVAANXMUSIC/assets/thumb/font.ttf", 40)
+ 
+        draw = ImageDraw.Draw(bg)
+ 
+        bar_width = 15
+        bar_height = center_thumb.height
+        bar_radius = 12
+        bar_y = thumb_pos[1]
+ 
+        duration_pos = (thumb_pos[0] - 160, bar_y - 40)
+        draw.text(duration_pos, duration[:23], fill="white", font=font_small)
+        dur_bbox = draw.textbbox(duration_pos, duration[:23], font=font_small)
+        dur_center_x = (dur_bbox[0] + dur_bbox[2]) // 2
+        bar_x = dur_center_x - (bar_width // 2)
+ 
+        draw.rounded_rectangle(
+            [bar_x, bar_y, bar_x + bar_width, bar_y + bar_height],
+            radius=bar_radius,
+            fill=(80, 80, 80, 150)
+        )
+ 
+        played_ratio = 0.25
+        fill_height = int(bar_height * played_ratio)
+        draw.rounded_rectangle(
+            [bar_x, bar_y + bar_height - fill_height, bar_x + bar_width, bar_y + bar_height],
+            radius=bar_radius,
+            fill=(bar_color[0], bar_color[1], bar_color[2], 255)
+        )
+ 
+        draw.text((bar_x - 50, bar_y + bar_height + 10), "00:25", fill="white", font=font_small)
+ 
+        text_left = thumb_pos[0]
+        text_top = thumb_pos[1] + center_thumb.height + 33
+        title_short = textwrap.shorten(title, width=50, placeholder="...")
+        draw.text((text_left, text_top), title_short, fill="white", font=font_title, stroke_width=1, stroke_fill="black")
+        draw.text((text_left, text_top + 44), f"{channel} | {views[:23]}", fill="white", font=font_small, stroke_width=1, stroke_fill="black")
+ 
+        rec_text = "Elite"
+        rec_bbox = draw.textbbox((0, 0), rec_text, font=font_brand)
+        rec_w = rec_bbox[2] - rec_bbox[0]
+        rec_h = rec_bbox[3] - rec_bbox[1]
+        rec_x = thumb_pos[0] + center_thumb.width + 35
+        rec_y = thumb_pos[1] + (center_thumb.height // 2) - (rec_h // 2)
+        draw.text((rec_x, rec_y), rec_text, fill="white", font=font_brand)
+ 
+        try:
+            os.remove(thumb_path)
+        except:
             pass
-
-    # Base image - dark background
-    try:
-        base = Image.open(thumb_path).resize((1280, 720)).convert("RGBA")
-    except Exception:
-        base = Image.new("RGBA", (1280, 720), (20, 20, 30, 255))  # Dark fallback
-    # Darken and blur for background
-    bg = ImageEnhance.Brightness(base.filter(ImageFilter.BoxBlur(10))).enhance(0.3)
-
-    # Frosted panel
-    panel_area = bg.crop((PANEL_X, PANEL_Y, PANEL_X + PANEL_W, PANEL_Y + PANEL_H))
-    overlay = Image.new("RGBA", (PANEL_W, PANEL_H), (255, 255, 255, TRANSPARENCY))
-    frosted = Image.alpha_composite(panel_area, overlay)
-    mask = Image.new("L", (PANEL_W, PANEL_H), 0)
-    mask_draw = ImageDraw.Draw(mask)
-    draw_rounded_rectangle(mask_draw, (0, 0, PANEL_W, PANEL_H), PANEL_RADIUS, fill=255)
-    frosted.putalpha(mask)
-    bg.paste(frosted, (PANEL_X, PANEL_Y), frosted)
-
-    # Fonts
-    draw = ImageDraw.Draw(bg)
-    try:
-        title_font = ImageFont.truetype("VIVAANXMUSIC/assets/thumb/font2.ttf", 36)  # Large for overlay
-        artist_font = ImageFont.truetype("VIVAANXMUSIC/assets/thumb/font2.ttf", 24)  # Medium for artist
-        regular_font = ImageFont.truetype("VIVAANXMUSIC/assets/thumb/font.ttf", 16)
-        channel_font = ImageFont.truetype("VIVAANXMUSIC/assets/thumb/font.ttf", 14)
-        icon_font = ImageFont.truetype("VIVAANXMUSIC/assets/thumb/font.ttf", ICON_FONT_SIZE)
-    except OSError:
-        title_font = artist_font = regular_font = channel_font = icon_font = ImageFont.load_default()
-
-    # Prepare thumbnail with red tint and overlays
-    thumb = base.resize((THUMB_W, THUMB_H))
-    # Apply red tint overlay
-    tint_overlay = Image.new("RGBA", thumb.size, RED_TINT)
-    thumb = Image.alpha_composite(thumb, tint_overlay)
-    # Rounded mask for thumb
-    tmask = Image.new("L", thumb.size, 255)
-    tdraw = ImageDraw.Draw(tmask)
-    draw_rounded_rectangle(tdraw, (0, 0, THUMB_W, THUMB_H), THUMB_RADIUS, fill=255)
-    thumb.putalpha(tmask)
-
-    # Overlay song title and artist on thumb (white, large)
-    thumb_draw = ImageDraw.Draw(thumb)
-    # Center title
-    title_w = title_font.getlength(song_name) if hasattr(title_font, 'getlength') else title_font.getbbox(song_name)[2]
-    thumb_draw.text(((THUMB_W - title_w) / 2, TITLE_OVERLAY_Y - THUMB_Y), song_name, fill="white", font=title_font)
-    # Center artist below
-    artist_w = artist_font.getlength(artist) if hasattr(artist_font, 'getlength') else artist_font.getbbox(artist)[2]
-    thumb_draw.text(((THUMB_W - artist_w) / 2, ARTIST_OVERLAY_Y - THUMB_Y), artist, fill="white", font=artist_font)
-
-    # Paste thumb to bg
-    bg.paste(thumb, (THUMB_X, THUMB_Y), thumb)
-
-    # Panel texts
-    # Channel at top right
-    channel_trim = trim_to_width(channel, channel_font, PANEL_W - 40)
-    channel_x = PANEL_X + PANEL_W - (channel_font.getlength(channel_trim) if hasattr(channel_font, 'getlength') else channel_font.getbbox(channel_trim)[2]) - 10
-    draw.text((channel_x, CHANNEL_Y), channel_trim, fill="#888888", font=channel_font)
-
-    # Artist in panel (repeat for prominence, with dots)
-    artist_panel = f"{artist} ---"
-    artist_trim = trim_to_width(artist_panel, regular_font, PANEL_W - 2 * INNER_OFFSET)
-    draw.text((PANEL_X + INNER_OFFSET, THUMB_Y + THUMB_H + 10), artist_trim, fill="black", font=regular_font)
-
-    # Song in panel? Example shows song on thumb, but perhaps small below
-    # Skip or add if needed; example has song on thumb primarily
-
-    # Vertical icons left
-    draw.text((ICON_X, HEART_Y), "♥", fill="white", font=icon_font)  # White for visibility on dark
-    draw.text((ICON_X, ADD_Y), "+", fill="white", font=icon_font)
-    draw.text((ICON_X, UP_Y), "↗", fill="white", font=icon_font)
-
-    # Progress bar
-    bar_y_center = PLAY_Y
-    draw.line([(BAR_X, bar_y_center), (BAR_X + BAR_TOTAL_LEN, bar_y_center)], fill="#E5E5E5", width=BAR_HEIGHT)
-    draw.line([(BAR_X, bar_y_center), (BAR_X + BAR_RED_LEN, bar_y_center)], fill="#FF0000", width=BAR_HEIGHT)
-    # Dot
-    dot_x = BAR_X + BAR_RED_LEN
-    draw.ellipse([(dot_x - DOT_RADIUS, bar_y_center - DOT_RADIUS), (dot_x + DOT_RADIUS, bar_y_center + DOT_RADIUS)], fill="#FF0000")
-
-    # Play button (simple red triangle for play; example shows pause, but default play)
-    tri_size = 7
-    tri_points = [
-        (PLAY_X - tri_size, PLAY_Y - tri_size // 2),
-        (PLAY_X + tri_size, PLAY_Y),
-        (PLAY_X - tri_size, PLAY_Y + tri_size // 2)
-    ]
-    draw.polygon(tri_points, fill="#FF0000")
-
-    # Times
-    def get_text_width(t, f):
-        if hasattr(f, 'getlength'):
-            return f.getlength(t)
-        bbox = f.getbbox(t)
-        return bbox[2] - bbox[0]
-
-    draw.text((BAR_X + 5, BAR_Y + TIME_OFFSET_Y), "00:00", fill="black", font=regular_font)
-    end_w = get_text_width(duration_text, regular_font)
-    end_x = BAR_X + BAR_TOTAL_LEN - end_w - 5
-    end_color = "#FF0000" if is_live else "black"
-    draw.text((end_x, BAR_Y + TIME_OFFSET_Y), duration_text, fill=end_color, font=regular_font)
-
-    # Cleanup
-    try:
-        os.remove(thumb_path)
-    except OSError:
-        pass
-
-    bg.convert("RGB").save(cache_path, "PNG", quality=95)
-    return cache_path
+ 
+        bg.save(final_path, format="PNG")
+        return final_path
+ 
+    except Exception as e:
+        print("Thumb error:", e)
+        return YOUTUBE_IMG_URL
