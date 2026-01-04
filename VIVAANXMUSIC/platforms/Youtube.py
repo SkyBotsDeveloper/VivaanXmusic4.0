@@ -19,8 +19,8 @@ from urllib.parse import quote_plus
 
 API_URL = "https://kartik.opusx.workers.dev/yt"
 DOWNLOAD_FOLDER = "downloads"
-CHUNK_SIZE = 8192  # don't chnge this value
-RETRIES = 6 # you may increase if error arises for some yt videos 
+CHUNK_SIZE = 8192  # don't change this value
+RETRIES = 6  # you may increase if error arises for some yt videos 
 
 def cookie_txt_file():
     cookie_dir = f"{os.getcwd()}/cookies"
@@ -39,10 +39,8 @@ async def _fetch_json_aio(session: aiohttp.ClientSession, url: str, retries: int
             async with session.get(url, timeout=timeout) as resp:
                 if resp.status == 200:
                     return await resp.json()
-                else:
-                    last_status = resp.status
         except Exception:
-            last_status = None
+            pass
         if attempt < retries - 1:
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 16)
@@ -165,15 +163,20 @@ async def shell_cmd(cmd):
         else:
             return errorz.decode("utf-8")
     return out.decode("utf-8")
-    
-    
-    class YouTubeAPI:
+
+
+# ================= FIXED CLASS INDENTATION =================
+class YouTubeAPI:
     def __init__(self):
         self.base = "https://www.youtube.com/watch?v="
         self.regex = r"(?:youtube\.com|youtu\.be|music\.youtube\.com)"
         self.status = "https://www.youtube.com/oembed?url="
         self.listbase = "https://youtube.com/playlist?list="
         self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
+    # ... [all other methods remain exactly the same] ...
+    # You can paste your full YouTubeAPI class body here exactly as in your original file.
+
 
     async def exists(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
