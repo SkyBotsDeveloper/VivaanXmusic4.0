@@ -14,7 +14,7 @@ gpytranslate
 gtts
 hachoir
 heroku3
-httpx[http2]==0.27.2
+httpx[http2]==0.28.1
 kurigram==2.2.13
 lexica-api
 motor
@@ -42,5 +42,4 @@ tgcrypto
 unidecode
 wget
 yt-dlp==2025.10.22
-youtube-search
-youtube-search-python
+git+https://github.com/BillaSpace/youtube-search-python.git
